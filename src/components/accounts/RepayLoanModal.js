@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TextInput, TouchableOpacity, Modal, Alert,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput, TouchableOpacity,
+  View,
 } from 'react-native';
-import { saveTransaction, updateAccount, updateRecurringPayment, deleteRecurringByAccountId } from '../../services/storage';
-import { getLoanStats, differenceInMonths } from '../../utils/accountUtils';
-import { getCurrencySymbol } from '../../utils/currencyUtils';
 import { useTheme } from '../../context/ThemeContext';
+import { deleteRecurringByAccountId, saveTransaction, updateAccount, updateRecurringPayment } from '../../services/storage';
+import { getLoanStats } from '../../utils/loanUtils';
+import { differenceInMonths } from '../../utils/dateUtils';
+import { getCurrencySymbol } from '../../utils/currencyUtils';
+
 
 export default function RepayLoanModal({ visible, item, accounts, activeUser, onClose, onSuccess }) {
   const { theme, fs } = useTheme();
@@ -47,9 +54,9 @@ export default function RepayLoanModal({ visible, item, accounts, activeUser, on
       // Update loan balance
       const stats = getLoanStats(item);
       const newBalance = Math.max(0, stats.closeTodayAmount - numAmt);
-      
-      await updateAccount({ 
-        id: item.id, 
+
+      await updateAccount({
+        id: item.id,
         balance: newBalance,
         loanStartDate: new Date().toISOString()
       });
@@ -97,7 +104,7 @@ export default function RepayLoanModal({ visible, item, accounts, activeUser, on
       <View style={styles.overlay}>
         <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
           <Text style={[styles.modalTitle, { fontSize: fs(18), color: theme.text }]}>Repay Loan: {item?.name}</Text>
-          
+
           <Text style={[styles.label, { color: theme.textSubtle, fontSize: fs(13) }]}>Repayment Amount ({getCurrencySymbol(activeUser?.currency)})</Text>
           <TextInput
             style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text, fontSize: fs(15) }]}
@@ -111,12 +118,12 @@ export default function RepayLoanModal({ visible, item, accounts, activeUser, on
           <Text style={[styles.label, { color: theme.textSubtle, fontSize: fs(13) }]}>Select Payment Source (Bank)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bankList}>
             {accounts.filter(a => a.type === 'BANK').map(bank => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={bank.id}
                 onPress={() => setBankId(bank.id)}
                 style={[
                   styles.bankCard,
-                  { 
+                  {
                     borderColor: bankId === bank.id ? theme.primary : theme.border,
                     backgroundColor: bankId === bank.id ? theme.primary + '11' : theme.surface,
                   }
@@ -132,13 +139,13 @@ export default function RepayLoanModal({ visible, item, accounts, activeUser, on
           </ScrollView>
 
           <View style={styles.buttonRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.button, styles.cancelBtn, { borderColor: theme.border }]}
               onPress={onClose}
             >
               <Text style={[styles.buttonText, { color: theme.text }]}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.button, styles.confirmBtn, { backgroundColor: theme.primary }]}
               onPress={confirmRepayment}
             >
@@ -158,10 +165,10 @@ const styles = StyleSheet.create({
   label: { marginBottom: 8 },
   input: { padding: 14, borderRadius: 10, borderWidth: 1, marginBottom: 16, borderColor: '#ccc' },
   bankList: { marginBottom: 20 },
-  bankCard: { 
-    padding: 12, 
-    borderRadius: 10, 
-    borderWidth: 2, 
+  bankCard: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 2,
     marginRight: 10,
     minWidth: 100,
     alignItems: 'center'

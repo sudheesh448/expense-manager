@@ -1,54 +1,8 @@
+import { getLoanStats } from './loanUtils';
+import { getEmiStats } from './emiUtils';
 import { getCreditCardStatus } from './billing';
 
-export const getLoanStats = (item) => {
-  const isLoan = item.type === 'LOAN' || item.type === 'BORROWED' || item.type === 'LENDED';
-  if (!isLoan || !item.loanPrincipal || !item.loanInterestRate || !item.loanTenure) {
-    return { isLoan: false, remainingTotal: item.balance || 0 };
-  }
-
-  const P_current = item.balance || 0;
-  const annualRate = item.loanInterestRate || 0;
-  const years_original = item.loanTenure || 0;
-  const loanStart = new Date(item.loanStartDate);
-  const n_original = years_original * 12;
-  const r = annualRate / 1200;
-
-  const differenceInMonths = (d1, d2) => {
-    let m = (d1.getFullYear() - d2.getFullYear()) * 12;
-    m -= d2.getMonth(); m += d1.getMonth();
-    return m <= 0 ? 0 : m;
-  };
-  const monthsPassed = Math.max(0, differenceInMonths(new Date(), loanStart));
-  const remainingMonths_projected = Math.max(0, n_original - monthsPassed);
-
-  let totalRepayable_current = P_current;
-
-  if (item.isEmi === 1) {
-    if (r > 0 && remainingMonths_projected > 0) {
-      const emi_current = (P_current * r * Math.pow(1 + r, remainingMonths_projected)) / (Math.pow(1 + r, remainingMonths_projected) - 1);
-      totalRepayable_current = emi_current * remainingMonths_projected;
-    }
-  } else {
-    // One-time payable at end
-    totalRepayable_current = P_current + (P_current * (annualRate / 100) * years_original);
-  }
-
-  // Apply Fine if Overdue
-  let fineAmount = 0;
-  if (monthsPassed > n_original && item.loanFinePercentage > 0) {
-    fineAmount = P_current * (item.loanFinePercentage / 100) * (monthsPassed - n_original);
-  }
-
-  const closeTodayAmount = (item.isEmi === 1) 
-    ? (P_current + fineAmount) 
-    : (P_current + (P_current * (annualRate / 100) * (monthsPassed / 12)) + fineAmount);
-
-  return { 
-    isLoan: true, 
-    remainingTotal: totalRepayable_current + fineAmount,
-    closeTodayAmount: closeTodayAmount 
-  };
-};
+export { getLoanStats, getEmiStats };
 
 export const calculateCreditCardAlerts = (accounts, transactions) => {
   return accounts

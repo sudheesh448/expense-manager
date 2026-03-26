@@ -1,52 +1,68 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, RefreshControl, Modal, TextInput
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
-  Plus, X, ChevronLeft, Archive, ShieldAlert, ShieldPlus 
+  Archive,
+  ChevronLeft,
+  Plus,
+  ShieldAlert, ShieldPlus
 } from 'lucide-react-native';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomHeader from '../components/CustomHeader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 // Storage & Utils
-import { 
-  getAccounts, softDeleteAccount, getAccountLogs, recordAccountFine, getDb,
-  getRecurringPayments, deleteRecurringPayment, stopRecurringPayment, 
-  restartRecurringPayment, deleteRecurringByAccountId,
-  payEmi, forecloseEmi, updateEmiInfo, getCategories, getExpectedExpenses,
-  getBudgets, deleteBudget
+import {
+  deleteBudget,
+  deleteRecurringByAccountId,
+  deleteRecurringPayment,
+  getAccounts,
+  getBudgets,
+  getCategories,
+  getDb,
+  getExpectedExpenses,
+  getRecurringPayments,
+  restartRecurringPayment,
+  softDeleteAccount,
+  stopRecurringPayment
 } from '../services/storage';
-import { getLoanStats } from '../utils/accountUtils';
 import { getCurrencySymbol } from '../utils/currencyUtils';
 
 
 // Modular Components
-import AddEditAccountModal from '../components/accounts/AddEditAccountModal';
-import AddRecurringModal from '../components/accounts/AddRecurringModal';
-import RepayLoanModal from '../components/accounts/RepayLoanModal';
-import ConvertToEmiModal from '../components/accounts/ConvertToEmiModal';
-import PausePickerModal from '../components/accounts/PausePickerModal';
-import AddFineModal from '../components/accounts/AddFineModal';
-import ForecloseEmiModal from '../components/accounts/ForecloseEmiModal';
-import LoanForecloseModal from '../components/loans/LoanForecloseModal';
-import AddBudgetModal from '../components/accounts/AddBudgetModal';
-import BudgetCard from '../components/accounts/cards/BudgetCard';
 import { AccountCard, RecurringCard } from '../components/accounts/AccountCards';
+import AddBudgetModal from '../components/accounts/AddBudgetModal';
+import AddEditAccountModal from '../components/accounts/AddEditAccountModal';
+import AddFineModal from '../components/accounts/AddFineModal';
+import AddRecurringModal from '../components/accounts/AddRecurringModal';
+import BudgetCard from '../components/accounts/cards/BudgetCard';
+import ConvertToEmiModal from '../components/accounts/ConvertToEmiModal';
+import ForecloseEmiModal from '../components/accounts/ForecloseEmiModal';
+import PausePickerModal from '../components/accounts/PausePickerModal';
+import RepayLoanModal from '../components/accounts/RepayLoanModal';
+import LoanForecloseModal from '../components/loans/LoanForecloseModal';
 
 const SECTION_CONFIG = {
-  'BANK':         { label: 'Bank Accounts',    color: '#3b82f6' },
-  'CREDIT_CARD': { label: 'Credit Cards',      color: '#8b5cf6' },
-  'INVESTMENT':  { label: 'Investments',       color: '#10b981' },
-  'SIP':         { label: 'SIPs',              color: '#06b6d4' },
-  'LOAN':        { label: 'Loans',             color: '#f59e0b' },
-  'BORROWED':    { label: 'Borrowed (Liability)', color: '#ef4444' },
-  'LENDED':      { label: 'Lended (Asset)',       color: '#10b981' },
-  'EMI':         { label: 'Credit Card EMIs',  color: '#ec4899' },
-  'RECURRING':   { label: 'Monthly Schedules', color: '#ef4444' },
+  'BANK': { label: 'Bank Accounts', color: '#3b82f6' },
+  'CREDIT_CARD': { label: 'Credit Cards', color: '#8b5cf6' },
+  'INVESTMENT': { label: 'Investments', color: '#10b981' },
+  'SIP': { label: 'SIPs', color: '#06b6d4' },
+  'LOAN': { label: 'Loans', color: '#f59e0b' },
+  'BORROWED': { label: 'Borrowed (Liability)', color: '#ef4444' },
+  'LENDED': { label: 'Lended (Asset)', color: '#10b981' },
+  'EMI': { label: 'Credit Card EMIs', color: '#ec4899' },
+  'RECURRING': { label: 'Monthly Schedules', color: '#ef4444' },
 };
 
 export default function AccountDetail() {
@@ -55,7 +71,7 @@ export default function AccountDetail() {
   const insets = useSafeAreaInsets();
   const { activeUser } = useAuth();
   const { theme, fs } = useTheme();
-  
+
   const { sectionKey, showClosed } = route.params || {};
   const config = SECTION_CONFIG[sectionKey] || { label: 'Details', color: theme.primary };
   const pageTitle = showClosed ? 'Closed EMIs' : config.label;
@@ -69,8 +85,8 @@ export default function AccountDetail() {
   const [budgets, setBudgets] = useState([]);
 
   // Modals Visibility
-  const [showAddForm, setShowAddForm]       = useState(false);
-  const [showRecurForm, setShowRecurForm]   = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showRecurForm, setShowRecurForm] = useState(false);
   const [showRepayModal, setShowRepayModal] = useState(false);
   const [showConverModal, setShowConvertModal] = useState(false);
   const [showPausePicker, setShowPausePicker] = useState(false);
@@ -125,13 +141,13 @@ export default function AccountDetail() {
       return allItems
         .filter(item => item && (item.isDeleted === 0 || item.isDeleted === null))
         .filter(item => {
-            const type = (item.type || 'EXPENSE').toUpperCase();
-            return type === activeTab;
+          const type = (item.type || 'EXPENSE').toUpperCase();
+          return type === activeTab;
         })
         .map(item => ({ ...item, status: item.status || 'ACTIVE' }));
     }
     let baseItems = (accounts || []).filter(acc => acc && acc.type === sectionKey);
-    
+
     if (sectionKey === 'CREDIT_CARD') {
       return baseItems.map(cc => ({ ...cc, totalUsage: cc.balance || 0 }));
     } else if (sectionKey === 'EMI') {
@@ -175,11 +191,12 @@ export default function AccountDetail() {
     } else {
       Alert.alert('Delete Account', 'This will permanently remove this account and all history. Continue?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => { 
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
             const db = await getDb();
-            await softDeleteAccount(db, item.id); 
-            loadData(); 
-          } 
+            await softDeleteAccount(db, item.id);
+            loadData();
+          }
         }
       ]);
     }
@@ -199,8 +216,8 @@ export default function AccountDetail() {
 
   const handleDeleteRecurring = (id) => {
     Alert.alert('Delete Recurring', 'Stop and delete this recurring item?', [
-       { text: 'Cancel', style: 'cancel' },
-       { text: 'Delete', style: 'destructive', onPress: async () => { await deleteRecurringPayment(id); loadData(); } }
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteRecurringPayment(id); loadData(); } }
     ]);
   };
 
@@ -219,14 +236,16 @@ export default function AccountDetail() {
   const handleRevertFromEmi = async (item) => {
     Alert.alert('Revert to Loan', 'Convert this EMI back to a standard reducing balance loan?', [
       { text: 'No' },
-      { text: 'Revert', onPress: async () => {
-        const db = await getDb();
-        await Promise.all([
-          updateLoanInfo(db, item.id, { ...item, isEmi: 0, loanTenure: (item.loanTenure || 0) / 12 }),
-          deleteRecurringByAccountId(item.id)
-        ]);
-        loadData();
-      }}
+      {
+        text: 'Revert', onPress: async () => {
+          const db = await getDb();
+          await Promise.all([
+            updateLoanInfo(db, item.id, { ...item, isEmi: 0, loanTenure: (item.loanTenure || 0) / 12 }),
+            deleteRecurringByAccountId(item.id)
+          ]);
+          loadData();
+        }
+      }
     ]);
   };
 
@@ -256,25 +275,25 @@ export default function AccountDetail() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} colors={[theme.primary]} tintColor={theme.primary} />}
       >
         {sectionKey === 'RECURRING' && (
-            <View style={[styles.tabContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                {['EXPENSE', 'INCOME', 'BUDGET'].map(tab => (
-                    <TouchableOpacity 
-                        key={tab}
-                        style={[
-                            styles.tab, 
-                            activeTab === tab && { backgroundColor: theme.primary }
-                        ]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[
-                            styles.tabText, 
-                            { color: activeTab === tab ? 'white' : theme.textSubtle, fontSize: fs(12) }
-                        ]}>
-                            {tab}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+          <View style={[styles.tabContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {['EXPENSE', 'INCOME', 'BUDGET'].map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tab,
+                  activeTab === tab && { backgroundColor: theme.primary }
+                ]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: activeTab === tab ? 'white' : theme.textSubtle, fontSize: fs(12) }
+                ]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
 
         {!refreshing && items.length === 0 && (
@@ -285,58 +304,58 @@ export default function AccountDetail() {
           </View>
         )}
         {items.map(item => (
-            sectionKey === 'RECURRING' ? (
-              activeTab === 'BUDGET' ? (
-                  <BudgetCard 
-                      key={item.id} item={item} categories={categories} 
-                      theme={theme} fs={fs} onDelete={handleDeleteBudget} 
-                      onEdit={(b) => { setSelectedBudget(b); setShowBudgetModal(true); }}
-                  />
-              ) : (
-                <RecurringCard
-                  key={item.id} item={item} theme={theme} fs={fs}
-                  onPause={(i) => { setSelectedItem(i); setShowPausePicker(true); }}
-                  onStop={handleStopRecurring} onRestart={handleRestartRecurring} 
-                  onDelete={(i) => handleDeleteRecurring(i.id)}
-                  onEdit={(i) => { setSelectedRecurring(i); setShowRecurForm(true); }}
-                />
-              )
+          sectionKey === 'RECURRING' ? (
+            activeTab === 'BUDGET' ? (
+              <BudgetCard
+                key={item.id} item={item} categories={categories}
+                theme={theme} fs={fs} onDelete={handleDeleteBudget}
+                onEdit={(b) => { setSelectedBudget(b); setShowBudgetModal(true); }}
+              />
             ) : (
-              <AccountCard
-                key={item.id} item={item} theme={theme} fs={fs} color={config.color}
-                accounts={accounts}
-                onEdit={openEditForm} onDelete={() => handleDeleteAccount(item)}
-                onRefresh={loadData}
-                onPauseMonth={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
-                onForeclose={(i) => { 
-                  setSelectedItem(i); 
-                  if (['LOAN', 'BORROWED', 'LENDED'].includes(i.type)) {
-                    setShowLoanForecloseModal(true);
-                  } else {
-                    setShowForecloseModal(true); 
-                  }
-                }}
-                onRepay={(i) => { 
-                  setSelectedItem(i); 
-                  setShowRepayModal(true); 
-                }}
-                onConvert={(i) => { setSelectedItem(i); setShowConvertModal(true); }}
-                onRevert={handleRevertFromEmi}
-                onCalendar={(i) => {
-                  const target = ['LOAN', 'BORROWED', 'LENDED'].includes(i.type) ? 'LoanDetails' : 'EmiDetails';
-                  navigation.navigate(target, { accountId: i.id });
-                }}
-                onAddFine={(i) => { setSelectedItem(i); setShowAddFineModal(true); }}
-                onPauseRecurring={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
-                onStopRecurring={handleStopRecurring} onRestartRecurring={handleRestartRecurring}
+              <RecurringCard
+                key={item.id} item={item} theme={theme} fs={fs}
+                onPause={(i) => { setSelectedItem(i); setShowPausePicker(true); }}
+                onStop={handleStopRecurring} onRestart={handleRestartRecurring}
+                onDelete={(i) => handleDeleteRecurring(i.id)}
+                onEdit={(i) => { setSelectedRecurring(i); setShowRecurForm(true); }}
               />
             )
-          ))}
+          ) : (
+            <AccountCard
+              key={item.id} item={item} theme={theme} fs={fs} color={config.color}
+              accounts={accounts}
+              onEdit={openEditForm} onDelete={() => handleDeleteAccount(item)}
+              onRefresh={loadData}
+              onPauseMonth={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
+              onForeclose={(i) => {
+                setSelectedItem(i);
+                if (['LOAN', 'BORROWED', 'LENDED'].includes(i.type)) {
+                  setShowLoanForecloseModal(true);
+                } else {
+                  setShowForecloseModal(true);
+                }
+              }}
+              onRepay={(i) => {
+                setSelectedItem(i);
+                setShowRepayModal(true);
+              }}
+              onConvert={(i) => { setSelectedItem(i); setShowConvertModal(true); }}
+              onRevert={handleRevertFromEmi}
+              onCalendar={(i) => {
+                const target = ['LOAN', 'BORROWED', 'LENDED'].includes(i.type) ? 'LoanDetails' : 'EmiDetails';
+                navigation.navigate(target, { accountId: i.id });
+              }}
+              onAddFine={(i) => { setSelectedItem(i); setShowAddFineModal(true); }}
+              onPauseRecurring={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
+              onStopRecurring={handleStopRecurring} onRestartRecurring={handleRestartRecurring}
+            />
+          )
+        ))}
       </ScrollView>
 
       {!showClosed && (
-        <TouchableOpacity 
-          style={[styles.addBtn, { backgroundColor: sectionKey === 'EMI' ? '#ec4899' : (sectionKey === 'RECURRING' ? '#ef4444' : theme.primary) }]} 
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: sectionKey === 'EMI' ? '#ec4899' : (sectionKey === 'RECURRING' ? '#ef4444' : theme.primary) }]}
           onPress={() => sectionKey === 'RECURRING' ? setShowRecurForm(true) : openAddForm()}
         >
           <Plus color="#FFF" size={24} />
@@ -344,8 +363,8 @@ export default function AccountDetail() {
       )}
 
       {sectionKey === 'EMI' && !showClosed && (
-        <TouchableOpacity 
-          style={[styles.archiveBtn, { backgroundColor: '#10b981', borderColor: '#10b981' }]} 
+        <TouchableOpacity
+          style={[styles.archiveBtn, { backgroundColor: '#10b981', borderColor: '#10b981' }]}
           onPress={() => navigation.push('AccountDetail', { sectionKey: 'EMI', showClosed: true })}
         >
           <Archive color="#FFF" size={20} />
@@ -353,8 +372,8 @@ export default function AccountDetail() {
       )}
 
       {sectionKey === 'RECURRING' && !showClosed && (
-        <TouchableOpacity 
-          style={[styles.archiveBtn, { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }]} 
+        <TouchableOpacity
+          style={[styles.archiveBtn, { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }]}
           onPress={() => setShowBudgetModal(true)}
         >
           <ShieldPlus color="#FFF" size={20} />
@@ -362,35 +381,35 @@ export default function AccountDetail() {
       )}
 
       {/* Modular Modals */}
-      <AddEditAccountModal 
-        visible={showAddForm} editingId={editingId} accountData={selectedItem} 
+      <AddEditAccountModal
+        visible={showAddForm} editingId={editingId} accountData={selectedItem}
         openSection={{ ...config, key: sectionKey }} accounts={accounts} activeUser={activeUser}
         expenseCategories={displayCategories}
         onClose={() => setShowAddForm(false)} onSuccess={loadData}
       />
 
-      <AddRecurringModal 
-        visible={showRecurForm} accounts={accounts} activeUser={activeUser} 
+      <AddRecurringModal
+        visible={showRecurForm} accounts={accounts} activeUser={activeUser}
         expenseCategories={displayCategories}
         initialData={selectedRecurring}
-        onClose={() => { setShowRecurForm(false); setSelectedRecurring(null); }} 
-        onSuccess={loadData} 
+        onClose={() => { setShowRecurForm(false); setSelectedRecurring(null); }}
+        onSuccess={loadData}
       />
 
-      <RepayLoanModal 
-        visible={showRepayModal} item={selectedItem} accounts={accounts} 
-        activeUser={activeUser} 
+      <RepayLoanModal
+        visible={showRepayModal} item={selectedItem} accounts={accounts}
+        activeUser={activeUser}
         onClose={() => setShowRepayModal(false)} onSuccess={loadData}
       />
 
-      <ConvertToEmiModal 
+      <ConvertToEmiModal
         visible={showConverModal} item={selectedItem} accounts={accounts}
-        activeUser={activeUser} 
+        activeUser={activeUser}
         onClose={() => setShowConvertModal(false)} onSuccess={loadData}
       />
 
-      <PausePickerModal 
-        visible={showPausePicker} item={selectedItem} 
+      <PausePickerModal
+        visible={showPausePicker} item={selectedItem}
         onClose={() => setShowPausePicker(false)} onSuccess={loadData}
       />
 
@@ -402,7 +421,7 @@ export default function AccountDetail() {
 
       <ForecloseEmiModal
         visible={showForecloseModal} item={selectedItem} accounts={accounts}
-        activeUser={activeUser} 
+        activeUser={activeUser}
         onClose={() => setShowForecloseModal(false)} onSuccess={loadData}
       />
 
@@ -430,13 +449,13 @@ export default function AccountDetail() {
               <Text style={{ color: theme.danger, fontSize: fs(18), fontWeight: 'bold' }}>Security Check</Text>
             </View>
             <Text style={{ color: theme.textSubtle, fontSize: fs(14), marginBottom: 20 }}>
-              {selectedItem?.type === 'CREDIT_CARD' 
+              {selectedItem?.type === 'CREDIT_CARD'
                 ? "This action will permanently delete this Credit Card and ALL associated EMI accounts and scheduled payments. All transactions will be preserved for history.\n\nEnter your 4-digit PIN to confirm."
                 : `This will delete the EMI account and the remaining balance of ${getCurrencySymbol(activeUser?.currency)}${(selectedItem?.ccRemaining || selectedItem?.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} will be added back to your credit card's remaining limit.\n\nEnter your 4-digit PIN to confirm.`}
             </Text>
-            <TextInput 
-              style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: pinError ? theme.danger : theme.border, borderRadius: 10, padding: 14, fontSize: fs(18), color: theme.text, letterSpacing: 8, textAlign: 'center', marginBottom: 8 }} 
-              keyboardType="numeric" maxLength={4} secureTextEntry value={pinValue} onChangeText={(v) => { setPinValue(v); setPinError(''); }} placeholder="••••" placeholderTextColor={theme.textSubtle} autoFocus 
+            <TextInput
+              style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: pinError ? theme.danger : theme.border, borderRadius: 10, padding: 14, fontSize: fs(18), color: theme.text, letterSpacing: 8, textAlign: 'center', marginBottom: 8 }}
+              keyboardType="numeric" maxLength={4} secureTextEntry value={pinValue} onChangeText={(v) => { setPinValue(v); setPinError(''); }} placeholder="••••" placeholderTextColor={theme.textSubtle} autoFocus
             />
             {pinError ? <Text style={{ color: theme.danger, fontSize: fs(12), marginBottom: 12, textAlign: 'center' }}>{pinError}</Text> : <View style={{ height: 20 }} />}
             <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -457,15 +476,15 @@ export default function AccountDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   backBtn: { padding: 4, marginLeft: -4 },
-  addBtn: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'absolute',
     right: 16,
-    top: 55, 
+    top: 55,
     elevation: 8,
     shadowColor: '#000',
     shadowOpacity: 0.25,
@@ -473,14 +492,14 @@ const styles = StyleSheet.create({
     zIndex: 20
   },
   archiveBtn: {
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'absolute',
-    right: 70, 
-    top: 55, 
+    right: 70,
+    top: 55,
     borderWidth: 1,
     elevation: 6,
     shadowColor: '#000',

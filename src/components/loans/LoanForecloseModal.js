@@ -6,7 +6,7 @@ import {
 import { AlertTriangle, Landmark, CheckCircle2, X } from 'lucide-react-native';
 import { getCurrencySymbol } from '../../utils/currencyUtils';
 import { forecloseLoan } from '../../services/storage/loanStorage';
-import { getLoanStats } from '../../utils/accountUtils';
+import { getLoanStats } from '../../utils/loanUtils';
 import { useTheme } from '../../context/ThemeContext';
 import { getDb } from '../../services/storage/utils';
 

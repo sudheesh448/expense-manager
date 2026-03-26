@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getCurrencySymbol } from '../../utils/currencyUtils';
 import { StyleSheet, Text, View, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { calculateTotalPayable, calculateRemainingPayable, calculateExtraCost, calculateExtraPercentage } from '../../utils/emiUtils';
+import { calculateTotalPayable, calculateRemainingPayable, calculateExtraCost, calculateExtraPercentage } from '../../utils/loanUtils';
+
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);

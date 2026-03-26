@@ -30,7 +30,7 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
     UNION ALL
     SELECT 'CREDIT_CARD' as type, currentUsage as balance FROM credit_cards WHERE id = ?
     UNION ALL
-    SELECT type, balance FROM loans WHERE id = ?
+    SELECT type, principal as balance FROM loans WHERE id = ?
     UNION ALL
     SELECT type, balance FROM investments WHERE id = ?
     UNION ALL
@@ -80,7 +80,7 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
     case 'BORROWED':
     case 'LENDED':
     case 'DEBT_REPAY':
-      await database.runAsync('UPDATE loans SET balance = ? WHERE id = ?', [newBalance, accountId]);
+      await database.runAsync('UPDATE loans SET principal = ? WHERE id = ?', [newBalance, accountId]);
       break;
     case 'INVESTMENT':
     case 'LUMP_SUM':

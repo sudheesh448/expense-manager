@@ -4,7 +4,8 @@ import {
   TextInput, TouchableOpacity, Modal, Alert,
 } from 'react-native';
 import { updateAccount, saveRecurringPayment } from '../../services/storage';
-import { getLoanStats } from '../../utils/accountUtils';
+import { getLoanStats } from '../../utils/loanUtils';
+
 import { useTheme } from '../../context/ThemeContext';
 
 export default function ConvertToEmiModal({ visible, item, accounts, activeUser, onClose, onSuccess }) {

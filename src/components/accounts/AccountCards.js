@@ -4,7 +4,7 @@ import EmiAccountCard from './cards/EmiAccountCard';
 import LoanAccountCard from './cards/LoanAccountCard';
 import CreditCardCard from './cards/CreditCardCard';
 import BaseAccountCard from './cards/BaseAccountCard';
-import { getLoanStats } from '../../utils/accountUtils';
+// Removed unused import
 
 import RecurringCard from './cards/RecurringCard';
 import SipAccountCard from './cards/SipAccountCard';

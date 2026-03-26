@@ -23,7 +23,8 @@ import LoanTransactionsModal from '../components/loans/LoanTransactionsModal';
 import LoanForecloseModal from '../components/loans/LoanForecloseModal';
 
 // Utils
-import { calculateAmortizationSchedule, calculateEmiTotals } from '../utils/emiUtils';
+import { calculateAmortizationSchedule, calculateEmiTotals } from '../utils/loanUtils';
+
 
 export default function LoanDetails() {
     const { theme, fs } = useTheme();

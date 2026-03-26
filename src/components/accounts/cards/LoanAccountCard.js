@@ -7,8 +7,9 @@ import {
 import { useAuth } from '../../../context/AuthContext';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
 import { formatInTZ } from '../../../utils/dateUtils';
-import { calculateAmortizationSchedule } from '../../../utils/emiUtils';
-import { getLoanStats } from '../../../utils/accountUtils';
+import { calculateAmortizationSchedule, getLoanStats } from '../../../utils/loanUtils';
+
+import PrincipalProgressBar from './PrincipalProgressBar';
 
 import { useNavigation } from '@react-navigation/native';
 import LoanActionModal from '../../loans/LoanActionModal';
@@ -176,6 +177,15 @@ const LoanAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, 
             </Text>
           </View>
         </View>
+        
+        {/* Principal Lifecycle Progress Bar */}
+        <PrincipalProgressBar 
+          principal_original={loan.principal_original} 
+          principal_current={loan.principal}
+          theme={theme} 
+          fs={fs} 
+          currencySymbol={currencySymbol}
+        />
 
         {/* Actions Bar */}
         <View style={styles.actionsBar}>

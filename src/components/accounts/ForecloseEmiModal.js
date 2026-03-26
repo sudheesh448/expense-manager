@@ -6,7 +6,8 @@ import {
 import { AlertTriangle, Landmark, CheckCircle2, X } from 'lucide-react-native';
 import { getCurrencySymbol } from '../../utils/currencyUtils';
 import { forecloseEmi } from '../../services/storage/emiStorage';
-import { getLoanStats } from '../../utils/accountUtils';
+import { getEmiStats } from '../../utils/emiUtils';
+
 import { useTheme } from '../../context/ThemeContext';
 
 export default function ForecloseEmiModal({ visible, item, accounts, activeUser, onClose, onSuccess }) {
@@ -17,7 +18,8 @@ export default function ForecloseEmiModal({ visible, item, accounts, activeUser,
 
   useEffect(() => {
     if (visible && item) {
-      const stats = getLoanStats(item);
+      const stats = getEmiStats(item);
+
       // For foreclosure, we typically pay the remaining principal or a slightly different settlement amount
       // We'll default to the remaining total (Principal + any pending interest/fine)
       setAmount(stats.remainingTotal.toFixed(2));

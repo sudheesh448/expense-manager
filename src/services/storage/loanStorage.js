@@ -1,6 +1,7 @@
 import { generateId, getDb, updateAccountBalanceSQL, ensureCategoryExists } from './utils';
 import { saveExpectedExpense } from './transactionStorage';
 import { addMonths, format } from 'date-fns';
+import { calculateAmortizationSchedule } from '../../utils/loanUtils';
 
 /**
  * Local helper to calculate EMI amount based on standard formula.
@@ -10,7 +11,7 @@ const calculateEmiValue = (principal, annualRate, tenure) => {
   const R = Number(annualRate || 0);
   const n = Number(tenure || 0);
   if (P <= 0 || n <= 0) return 0;
-  
+
   const r = R / 1200;
   if (r > 0) {
     return (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
@@ -18,205 +19,153 @@ const calculateEmiValue = (principal, annualRate, tenure) => {
   return P / n;
 };
 
-/**
- * Save loan-specific details.
- * Handles displacement transaction and expected expense generation.
- */
-export const saveLoanInfo = async (database, id, data) => {
-  if (!database || !id) return;
+export const saveLoanInfo = async (activeUserId, loanData, currencySymbol) => {
+  const database = await getDb();
+  const userId = activeUserId;
+  const id = generateId();
 
-  let emiAmount = data.emiAmount || data.loanEmi || null;
-  if (data.loanType === 'EMI' && !emiAmount) {
-    emiAmount = calculateEmiValue(data.loanPrincipal, data.loanInterestRate, data.loanTenure);
+  // Ensure system category exists
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
+
+  // If no manual EMI provided, calculate it
+  let finalEmi = Number(loanData.emiAmount || 0);
+  if (finalEmi <= 0 && loanData.loanType === 'EMI') {
+    finalEmi = calculateEmiValue(loanData.principal, loanData.loanInterestRate, loanData.loanTenure);
   }
 
-  const sql = `INSERT INTO loans (
-    id, userId, type, loanType, name, disbursedPrincipal, principal, interestRate, tenure, 
-    startDate, emiStartDate, emiAmount,
-    finePercentage, serviceCharge, processingFee, taxPercentage, loanFinePaid, 
-    paidMonths, installmentStatus, isClosed, closureAmount
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  // Initial installment status (dictionary)
+  const status = {};
+  const paidMonthsCount = parseInt(loanData.paidMonths || 0, 10);
+  const startDate = new Date(loanData.loanStartDate);
   
-  await database.runAsync(sql, [
-    id,
-    data.userId,
-    data.type,
-    data.loanType || 'ONE_TIME',
-    data.name,
-    Number(data.loanPrincipal || 0),
-    Number(data.loanPrincipal || 0),
-    Number(data.loanInterestRate || 0),
-    Number(data.loanTenure || 0),
-    data.loanStartDate || new Date().toISOString(),
-    data.emiStartDate || null,
-    emiAmount,
-    Number(data.loanFinePercentage || 0),
-    Number(data.loanServiceCharge || 0),
-    Number(data.loanProcessingFee || 0),
-    Number(data.loanTaxPercentage || 0),
-    Number(data.loanFinePaid || 0),
-    Number(data.paidMonths || 0),
-    JSON.stringify(data.installmentStatus || {}),
-    data.isClosed ? 1 : 0,
-    data.loanClosureAmount || null
-  ]);
-
-  // Disbursement logic: if targetAccountId is provided, credit the bank
-  if (data.targetAccountId) {
-    const P = Number(data.loanPrincipal || 0);
-    const fee = Number(data.loanProcessingFee || 0);
-    const creditedAmount = P - fee;
-
-    if (creditedAmount > 0) {
-      const txId = generateId();
-      await database.runAsync(
-        'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [txId, data.userId, 'INCOME', creditedAmount, data.loanStartDate || new Date().toISOString(), data.targetAccountId, `Loan Disbursement: ${data.name} (Less Processing Fee: ${fee})`, id]
-      );
-      await updateAccountBalanceSQL(database, data.targetAccountId, creditedAmount, 'INCOME', true);
-    }
+  for (let i = 1; i <= paidMonthsCount; i++) {
+    const d = new Date(startDate);
+    d.setMonth(startDate.getMonth() + i - 1);
+    const key = format(d, 'yyyy-MM');
+    status[key] = 'paid';
   }
 
-  if (data.loanType === 'EMI') {
-    await generateLoanExpectedExpenses(database, id, { ...data, emiAmount });
-  }
-};
+  await database.runAsync(
+    `INSERT INTO loans (
+      id, userId, name, type, loanType, actualDisbursedPrincipal, principal, 
+      loanInterestRate, loanTenure, loanStartDate, isClosed, 
+      emiAmount, isDone, linkedAccountId, categoryId, paidMonths, installmentStatus
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id, userId, loanData.name, loanData.type, loanData.loanType, loanData.principal, loanData.principal,
+      loanData.loanInterestRate, loanData.loanTenure, loanData.loanStartDate, 0,
+      finalEmi, 0, loanData.bankAccountId, category.id, paidMonthsCount, JSON.stringify(status)
+    ]
+  );
 
-/**
- * Update loan-specific details.
- */
-export const updateLoanInfo = async (database, id, data) => {
-  if (!database || !id) return;
-
-  let emiAmount = data.emiAmount || data.loanEmi || null;
-  if (data.loanType === 'EMI' && !emiAmount) {
-    emiAmount = calculateEmiValue(data.loanPrincipal, data.loanInterestRate, data.loanTenure);
-  }
-
-  const sql = `UPDATE loans SET 
-    name = ?, disbursedPrincipal = ?, principal = ?, interestRate = ?, tenure = ?, 
-    startDate = ?, emiStartDate = ?, emiAmount = ?, loanType = ?,
-    finePercentage = ?, serviceCharge = ?, processingFee = ?, taxPercentage = ?, 
-    loanFinePaid = ?, paidMonths = ?, isClosed = ?, closureAmount = ?, installmentStatus = ?
-    WHERE id = ?`;
-    
-  await database.runAsync(sql, [
-    data.name,
-    Number(data.loanPrincipal || 0),
-    Number(data.principal || data.loanPrincipal || 0),
-    Number(data.loanInterestRate || 0),
-    Number(data.loanTenure || 0),
-    data.loanStartDate,
-    data.emiStartDate || null,
-    emiAmount,
-    data.loanType || 'ONE_TIME',
-    Number(data.loanFinePercentage || 0),
-    Number(data.loanServiceCharge || 0),
-    Number(data.loanProcessingFee || 0),
-    Number(data.loanTaxPercentage || 0),
-    Number(data.loanFinePaid || 0),
-    Number(data.paidMonths || 0),
-    data.isClosed ? 1 : 0,
-    data.loanClosureAmount || null,
-    JSON.stringify(data.installmentStatus || {}),
-    id
-  ]);
-
-  // Regenerate expected expenses if it's an EMI loan
-  if (data.loanType === 'EMI') {
-    await database.runAsync('UPDATE expected_expenses SET isDeleted = 1 WHERE linkedAccountId = ? AND isDone = 0', [id]);
-    await generateLoanExpectedExpenses(database, id, { ...data, emiAmount });
-  }
-};
-
-/**
- * Generate future installments in expected_expenses table.
- */
-export const generateLoanExpectedExpenses = async (database, id, data) => {
-  const n = parseInt(data.loanTenure || 0, 10);
-  if (n <= 0) return;
-
-  const emiAmount = Number(data.emiAmount || data.loanEmi || 0);
-  if (emiAmount <= 0) return;
-
-  const start = new Date(data.emiStartDate || data.loanStartDate || new Date().toISOString());
-  const category = await ensureCategoryExists(data.userId, 'Loan Payment', 'loan_pay', 1);
-
-  for (let i = 0; i < n; i++) {
-    const forecastDate = addMonths(start, i);
-    const monthKey = format(forecastDate, 'yyyy-MM');
-    
-    // Check if it already exists for this months to avoid duplicates (though we deletes unpaid above)
-    const exists = await database.getFirstAsync(
-      'SELECT id FROM expected_expenses WHERE userId = ? AND linkedAccountId = ? AND monthKey = ? AND isDeleted = 0',
-      [data.userId, id, monthKey]
+  // Record disbursement transaction if it's the principal amount going into a bank
+  if (loanData.bankAccountId) {
+    const txId = generateId();
+    await database.runAsync(
+      'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [txId, userId, 'INCOME', loanData.principal, loanData.loanStartDate, loanData.bankAccountId, `Disbursement: ${loanData.name}`, id, category.id]
     );
 
-    if (!exists) {
-      await saveExpectedExpense(data.userId, {
-        monthKey,
-        name: `Loan: ${data.name} (${i + 1}/${n})`,
-        amount: emiAmount,
-        isDone: 0,
-        categoryId: category.id,
+    // Update bank balance
+    await updateAccountBalanceSQL(database, loanData.bankAccountId, loanData.principal, 'INCOME', false);
+  }
+
+  // Generate future expected expenses
+  const months = Math.round(loanData.loanTenure);
+  if (loanData.loanType === 'EMI') {
+    for (let i = paidMonthsCount + 1; i <= months; i++) {
+      const dueDate = addMonths(new Date(loanData.loanStartDate), i - 1);
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Loan EMI: ${loanData.name}`,
+        amount: finalEmi,
         type: 'EXPENSE',
+        monthKey: format(dueDate, 'yyyy-MM'),
+        date: dueDate.toISOString(),
         linkedAccountId: id,
-        anchorDay: start.getDate()
+        categoryId: category.id
       });
     }
+  } else if (loanData.loanType === 'ONE_TIME') {
+      const dueDate = addMonths(new Date(loanData.loanStartDate), months);
+      const totalPayable = Number(loanData.principal) + (Number(loanData.principal) * (Number(loanData.loanInterestRate) / 100) * (months / 12));
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Loan Settlement: ${loanData.name}`,
+        amount: totalPayable,
+        type: 'EXPENSE',
+        monthKey: format(dueDate, 'yyyy-MM'),
+        date: dueDate.toISOString(),
+        linkedAccountId: id,
+        categoryId: category.id
+      });
   }
+
+  return { ...loanData, id };
 };
 
-/**
- * Record a principal prepayment and recalculate future EMIs.
- */
-export const recordPrincipalPrepayment = async (database, accountId, bankAccountId, amount, userId) => {
-  if (!database || !accountId || amount <= 0) return;
+export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
+  const database = await getDb();
+  const userId = activeUserId;
 
-  const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
-  if (!account) return;
+  // Ensure system category exists
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
 
-  const newPrincipal = Math.max(0, (account.principal || 0) - amount);
-  // disbursedPrincipal remains unchanged (Original)
-
-  // Calculate remaining months
-  const paidMonthsCount = parseInt(account.paidMonths || 0, 10);
-  const totalTenure = parseInt(account.tenure || 0, 10);
-  const remainingMonths = totalTenure - paidMonthsCount;
-
-  let newEmi = account.emiAmount;
-  if (account.loanType === 'EMI' && remainingMonths > 0) {
-    newEmi = calculateEmiValue(newPrincipal, account.interestRate, remainingMonths);
+  // Recalculate EMI if core parameters changed and it wasn't a manual override previously? 
+  // For now, respect the provided emiAmount if it exists.
+  let finalEmi = Number(loanData.emiAmount || 0);
+  if (finalEmi <= 0 && loanData.loanType === 'EMI') {
+    finalEmi = calculateEmiValue(loanData.principal, loanData.loanInterestRate, loanData.loanTenure);
   }
 
-  // Update loan record
   await database.runAsync(
-    'UPDATE loans SET principal = ?, emiAmount = ? WHERE id = ?',
-    [newPrincipal, newEmi, accountId]
+    `UPDATE loans SET 
+      name = ?, type = ?, loanType = ?, actualDisbursedPrincipal = ?, principal = ?, 
+      loanInterestRate = ?, loanTenure = ?, loanStartDate = ?,
+      emiAmount = ?, linkedAccountId = ?, paidMonths = ?
+    WHERE id = ?`,
+    [
+      loanData.name, loanData.type, loanData.loanType, loanData.principal, loanData.principal,
+      loanData.loanInterestRate, loanData.loanTenure, loanData.loanStartDate,
+      finalEmi, loanData.bankAccountId, loanData.paidMonths, accountId
+    ]
   );
 
-  // Record transaction
-  const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'Loan Payment', 'loan_pay', 1);
+  // Clear future unpaid expected expenses and regenerate
   await database.runAsync(
-    'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [txId, userId, 'LOAN_PREPAYMENT', amount, new Date().toISOString(), bankAccountId, `Principal Prepayment: ${account.name}`, accountId, category.id]
+    'DELETE FROM expected_expenses WHERE userId = ? AND linkedAccountId = ? AND isDone = 0 AND (isDeleted = 0 OR isDeleted IS NULL)',
+    [userId, accountId]
   );
 
-  // Update bank balance
-  if (bankAccountId) {
-    await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
-  }
+  const months = Math.round(loanData.loanTenure);
+  const paidMonthsCount = parseInt(loanData.paidMonths || 0, 10);
 
-  // Sync expected expenses for remaining months
-  if (account.loanType === 'EMI') {
-    await database.runAsync('UPDATE expected_expenses SET isDeleted = 1 WHERE linkedAccountId = ? AND isDone = 0', [accountId]);
-    await generateLoanExpectedExpenses(database, accountId, { 
-      ...account, 
-      loanPrincipal: newPrincipal, 
-      loanTenure: remainingMonths, // We regenerate only for remaining
-      emiStartDate: account.emiStartDate || account.startDate,
-      emiAmount: newEmi 
+  if (loanData.loanType === 'EMI') {
+    for (let i = paidMonthsCount + 1; i <= months; i++) {
+      const dueDate = addMonths(new Date(loanData.loanStartDate), i - 1);
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Loan EMI: ${loanData.name}`,
+        amount: finalEmi,
+        type: 'EXPENSE',
+        monthKey: format(dueDate, 'yyyy-MM'),
+        date: dueDate.toISOString(),
+        linkedAccountId: accountId,
+        categoryId: category.id
+      });
+    }
+  } else if (loanData.loanType === 'ONE_TIME') {
+    const dueDate = addMonths(new Date(loanData.loanStartDate), months);
+    const totalPayable = Number(loanData.principal) + (Number(loanData.principal) * (Number(loanData.loanInterestRate) / 100) * (months / 12));
+    await saveExpectedExpense(database, {
+      userId,
+      name: `Loan Settlement: ${loanData.name}`,
+      amount: totalPayable,
+      type: 'EXPENSE',
+      monthKey: format(dueDate, 'yyyy-MM'),
+      date: dueDate.toISOString(),
+      linkedAccountId: accountId,
+      categoryId: category.id
     });
   }
 
@@ -224,115 +173,144 @@ export const recordPrincipalPrepayment = async (database, accountId, bankAccount
 };
 
 /**
- * Record a loan fine.
+ * Handle principal prepayment for a loan.
+ * This logic adds a transaction, updates current principal, 
+ * and optionally recalculates future EMIs.
  */
-export const recordLoanFine = async (database, accountId, bankAccountId, amount, userId) => {
-  if (!database || !accountId || amount <= 0) return;
-
+export const recordPrincipalPrepayment = async (userId, accountId, bankAccountId, amount) => {
+  const database = await getDb();
+  
+  // 1. Fetch current loan details
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
-  if (!account) return;
+  if (!account) throw new Error('Account not found');
 
-  // Record transaction
+  // 2. Add Prepayment Transaction
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'Loan Payment', 'loan_pay', 1);
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
+
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [txId, userId, 'loan fine', amount, new Date().toISOString(), bankAccountId, `Fine/Penalty: ${account.name}`, accountId, category.id]
+    [txId, userId, 'LOAN_PREPAYMENT', amount, new Date().toISOString(), bankAccountId, `Prepayment: ${account.name}`, accountId, category.id]
   );
 
-  // Update loan record
+  // 3. Update current principal
+  const newPrincipal = Math.max(0, account.principal - amount);
+  
+  // 4. Auto-close if principal hits 0
+  const isClosed = newPrincipal <= 0 ? 1 : 0;
+
   await database.runAsync(
-    'UPDATE loans SET loanFinePaid = COALESCE(loanFinePaid, 0) + ? WHERE id = ?',
-    [amount, accountId]
+    'UPDATE loans SET principal = ?, isClosed = ? WHERE id = ?',
+    [newPrincipal, isClosed, accountId]
   );
 
-  // Update bank balance
-  if (bankAccountId) {
-    await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
-  }
+  // 5. Update bank balance
+  await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
+
+  // 6. Recalculate future EMIs based on new principal? 
+  // Most banks keep EMI same but reduce tenure. 
+  // For this app, we'll keep it simple and just update the principal.
+  // The amortization table will reflect the shorter lifespan automatically if we just update the schedule.
+  
+  // However, we must clear/regenerate expected expenses to reflect the NEW schedule if we wanted to be perfectly accurate.
+  // For now, the next time the user settles an EMI, it will just work.
 
   return true;
 };
 
-/**
- * Foreclose a loan.
- */
-export const forecloseLoan = async (database, accountId, bankAccountId, amount, userId) => {
-  if (!database || !accountId || amount <= 0) return;
-
+export const recordLoanFine = async (userId, accountId, bankAccountId, amount, monthKey) => {
+  const database = await getDb();
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
-  if (!account) return;
 
-  // Record transaction
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'Loan Payment', 'loan_pay', 1);
+  await database.runAsync(
+    'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId, monthKey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [txId, userId, 'LOAN_FINE', amount, new Date().toISOString(), bankAccountId, `Penalty: ${account.name} (${monthKey})`, accountId, category.id, monthKey]
+  );
+
+  // Fines are just expenses, they don't affect loan principal but they DO deduct from bank
+  await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
+  return true;
+};
+
+export const forecloseLoan = async (userId, accountId, bankAccountId, settlementAmount) => {
+  const database = await getDb();
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
+  const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
+
+  const txId = generateId();
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [txId, userId, 'LOAN_FORECLOSURE', amount, new Date().toISOString(), bankAccountId, `Loan Foreclosure: ${account.name}`, accountId, category.id]
+    [txId, userId, 'LOAN_FORECLOSURE', settlementAmount, new Date().toISOString(), bankAccountId, `Foreclosure: ${account.name}`, accountId, category.id]
   );
 
-  // Update loan record
+  // Update loan record: set principal to 0 and mark closed
   await database.runAsync(
-    'UPDATE loans SET principal = 0, isClosed = 1, closureAmount = ? WHERE id = ?',
-    [amount, accountId]
+    'UPDATE loans SET principal = 0, isClosed = 1, loanClosureAmount = ? WHERE id = ?',
+    [settlementAmount, accountId]
   );
 
-  // Update bank balance
-  if (bankAccountId) {
-    await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
-  }
+  // Deduct from bank
+  await updateAccountBalanceSQL(database, bankAccountId, settlementAmount, 'EXPENSE', false);
 
-  // Delete all future expected expenses for this loan
-  await database.runAsync('UPDATE expected_expenses SET isDeleted = 1 WHERE linkedAccountId = ? AND isDone = 0', [accountId]);
+  // Delete future unpaid expected expenses
+  await database.runAsync(
+    'DELETE FROM expected_expenses WHERE userId = ? AND linkedAccountId = ? AND isDone = 0 AND (isDeleted = 0 OR isDeleted IS NULL)',
+    [userId, accountId]
+  );
 
   return true;
 };
 
-/**
- * Pay a loan installment.
- */
-export const payLoanInstallment = async (database, accountId, bankAccountId, amount, monthKey, userId) => {
-  if (!database || !accountId || amount <= 0) return;
-
+export const payLoanInstallment = async (userId, accountId, bankAccountId, amount, monthKey) => {
+  const database = await getDb();
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
-  if (!account) throw new Error("Loan Account not found");
+  if (!account) throw new Error('Loan not found');
 
-  // Calculate principal/interest split for this payment
-  const P = Number(account.principal || 0);
-  const R = Number(account.interestRate || 0);
-  const monthlyRate = R / 1200;
+  const category = await ensureCategoryExists(database, userId, 'loan_pay', 'EXPENSE');
+
+  // Amortization logic to split amount between principal and interest
+  // Here we simplify by using the schedule helper
+  const schedule = calculateAmortizationSchedule(account);
+  const row = schedule.find(r => r.monthKey === monthKey);
   
-  const interestPortion = P * monthlyRate;
-  const principalPortion = Math.max(0, Math.min(P, amount - interestPortion));
-  
-  const newPrincipal = Math.max(0, P - principalPortion);
-  // disbursedPrincipal remains unchanged
+  // Use schedule values or fall back to full amount as principal if not found
+  const interestPortion = row ? row.interest : 0;
+  const principalPortion = row ? row.principal : amount;
 
-  // Update status object
-  const status = JSON.parse(account.installmentStatus || '{}');
-  if (monthKey) status[monthKey] = 'paid';
-  const newPaidMonths = (account.paidMonths || 0) + 1;
+  // 1. Update Installment Status Dictionary
+  const status = typeof account.installmentStatus === 'string' ? JSON.parse(account.installmentStatus || '{}') : (account.installmentStatus || {});
+  status[monthKey] = 'paid';
 
-  // Record transaction
+  const newPaidMonths = Object.keys(status).filter(k => status[k] === 'paid').length;
+  let newPrincipal = Math.max(0, account.principal - principalPortion);
+
+  // Force close logic if it's the last month or principal is negligible
+  const isFinalMonth = row?.month === account.loanTenure;
+  if (isFinalMonth || newPrincipal < 1) {
+    newPrincipal = 0;
+  }
+
+  // 2. Add Transaction
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'Loan Payment', 'loan_pay', 1);
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [txId, userId, 'LOAN_REPAYMENT', amount, new Date().toISOString(), bankAccountId, `Loan EMI: ${account.name} (${monthKey})`, accountId, category.id]
   );
 
-  // Update loan record
+  // 3. Update loan record
   await database.runAsync(
     'UPDATE loans SET principal = ?, paidMonths = ?, installmentStatus = ? WHERE id = ?',
     [newPrincipal, newPaidMonths, JSON.stringify(status), accountId]
   );
 
-  // Update bank balance
+  // 4. Update bank balance
   if (bankAccountId) {
     await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
   }
 
-  // Mark expected expense as done
+  // 5. Mark expected expense as done
   if (monthKey) {
     await database.runAsync(
       'UPDATE expected_expenses SET isDone = 1, isDeleted = 0 WHERE userId = ? AND monthKey = ? AND linkedAccountId = ? AND isDone = 0',

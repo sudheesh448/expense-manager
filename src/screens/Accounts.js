@@ -30,7 +30,9 @@ import {
   getDb, getAccounts, getAccountLogs, updateLoanInfo, 
   getRecurringPayments, deleteRecurringByAccountId 
 } from '../services/storage';
-import { getLoanStats } from '../utils/accountUtils';
+import { getLoanStats } from '../utils/loanUtils';
+import { getEmiStats } from '../utils/emiUtils';
+
 import { getCurrencySymbol } from '../utils/currencyUtils';
 
 // Modular Components
@@ -96,8 +98,11 @@ export default function Accounts() {
       const items = sectionItems(s.key);
       if (s.key === 'RECURRING') {
         res[s.key] = items.reduce((sum, i) => sum + ((i && i.status === 'ACTIVE') ? i.amount : 0), 0);
-      } else if (s.key === 'LOAN' || s.key === 'BORROWED' || s.key === 'LENDED' || s.key === 'EMI') {
+      } else if (s.key === 'LOAN' || s.key === 'BORROWED' || s.key === 'LENDED') {
         res[s.key] = items.reduce((sum, i) => sum + (i ? getLoanStats(i).remainingTotal : 0), 0);
+      } else if (s.key === 'EMI') {
+        res[s.key] = items.reduce((sum, i) => sum + (i ? getEmiStats(i).remainingTotal : 0), 0);
+
       } else if (s.key === 'CREDIT_CARD') {
         res[s.key] = items.reduce((sum, i) => sum + (i ? (i.creditLimit || 0) - (i.totalUsage || 0) : 0), 0);
       } else if (s.key === 'SIP') {

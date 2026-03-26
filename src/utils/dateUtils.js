@@ -131,3 +131,17 @@ export const findNearestTimezone = (tzId) => {
 
   return 'UTC';
 };
+
+/**
+ * Calculate the difference in months between two dates.
+ * @param {Date} date1 Newer date
+ * @param {Date} date2 Older date
+ * @returns {number} Difference in months
+ */
+export const differenceInMonths = (date1, date2) => {
+    let months = (date1.getFullYear() - date2.getFullYear()) * 12;
+    months -= date2.getMonth();
+    months += date1.getMonth();
+    return months <= 0 ? 0 : months;
+};
+

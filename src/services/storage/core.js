@@ -322,6 +322,7 @@ export const initDatabase = async () => {
         try { await database.execAsync(sql); } catch (e) { }
       };
       await runMigration('ALTER TABLE loans RENAME COLUMN balance TO disbursedPrincipal;');
+      await addColumn('loans', 'installmentStatus', 'TEXT', "'{}'");
       await runMigration("ALTER TABLE users ADD COLUMN lastBackupTimestamp TEXT DEFAULT NULL;");
       await runMigration("UPDATE transactions SET createdAt = date WHERE createdAt IS NULL;");
       await runMigration(`ALTER TABLE users ADD COLUMN dashboardGraphs TEXT DEFAULT '{"monthlyTrends":true,"totalSavings":true,"ccUtilization":true,"totalCcOutstanding":true,"nonEmiCcOutstanding":true,"monthlyExpenseSplit":true,"totalLiabilities":true}';`);
@@ -412,7 +413,8 @@ export const getAccounts = async (arg1, arg2) => {
             COALESCE(s.amount, i.sipAmount) as sipAmount, 
             i.lastUpdate as investmentLastUpdate,
             e.amount as emiAmountVal, e.emiDate as emiDateVal, e.tenure as emiTenureVal, e.paidMonths as emiPaidMonthsVal,
-            e.ccUsage, e.productPrice, e.processingFee, e.ccRemaining, e.emiStartDate, e.installmentStatus,
+            e.ccUsage, e.productPrice, e.processingFee, e.ccRemaining, e.emiStartDate, 
+            COALESCE(e.installmentStatus, l.installmentStatus) as installmentStatus,
             e.tenure as tenure, e.amount as amount,
             e.closureAmount as emiClosureAmount,
             e.linkedAccountId as linkedAccountId, e.linkedAccountId as sourceCcId,
