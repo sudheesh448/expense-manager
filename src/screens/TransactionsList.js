@@ -1,28 +1,37 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, TextInput, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Modal, ScrollView, TextInput, Alert, Platform, BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { X, Search, Pencil, Trash2, Settings2 } from 'lucide-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { X, Search, Filter, Pencil, Trash2, Settings2, ArrowUpRight, ArrowDownLeft, RefreshCw, CreditCard, Landmark, Banknote, ShieldAlert, Clock, CornerDownRight, Link } from 'lucide-react-native';
+import CustomHeader from '../components/CustomHeader';
 import { getTransactions, getCategories, getAllAccountsForLookup, deleteTransaction, updateTransaction } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import CustomDropdown from '../components/CustomDropdown';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
+import TransactionsFilterModal from '../components/TransactionsFilterModal';
+import { formatInTZ } from '../utils/dateUtils';
+import { getCurrencySymbol } from '../utils/currencyUtils';
 
 export default function TransactionsList({ navigation }) {
   const { activeUser } = useAuth();
-  const { theme, fs } = useTheme();
+  const { theme, fs, setIsSettingsOpen } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // ── State ───────────────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
-
-  const [filterType, setFilterType] = useState('ALL');
-  const [filterCategory, setFilterCategory] = useState('ALL');
-
-
   const [accounts, setAccounts] = useState([]);
+  const [filters, setFilters] = useState({
+    type: 'ALL',
+    accountId: 'ALL',
+    accountType: 'ALL',
+    month: null,
+    date: null
+  });
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [expandedTxId, setExpandedTxId] = useState(null);
-
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -31,6 +40,13 @@ export default function TransactionsList({ navigation }) {
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
 
+  // PIN Verification State
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinValue, setPinValue] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [txToDelete, setTxToDelete] = useState(null);
+
+  // ── Data Loading ─────────────────────────────────────────────────────────
   const loadData = async () => {
     const txs = await getTransactions(activeUser.id);
     const sortedTxs = txs.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -48,192 +64,224 @@ export default function TransactionsList({ navigation }) {
   );
 
   React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: showSearch ? () => (
-        <TextInput
-          style={{ flex: 1, minWidth: 200, fontSize: fs(15), backgroundColor: theme.background, color: theme.text, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 }}
-          placeholderTextColor={theme.textSubtle}
-          placeholder="Search..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoFocus
-        />
-      ) : 'Transactions',
-      headerRight: () => (
-        <TouchableOpacity style={{ marginRight: 16, padding: 4 }} onPress={() => { setShowSearch(!showSearch); setSearchQuery(''); setVisibleCount(20); }}>
-          {showSearch ? <X color={theme.textMuted} size={22} /> : <Search color={theme.text} size={22} />}
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, showSearch, searchQuery, theme, fs]);
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
-  const getCategoryName = (categoryId) => {
+  useEffect(() => {
+    const backAction = () => {
+      if (showSearch) {
+        setShowSearch(false);
+        setSearchQuery('');
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [showSearch]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function getCategoryName(categoryId) {
     if (!categoryId) return '';
     const cat = categories.find(c => c.id === categoryId);
     return cat ? cat.name : '';
-  };
+  }
 
-  const getAccountName = (accId) => {
+  function getAccountDisplay(accId) {
     const acc = accounts.find(a => a.id === accId);
-    return acc ? acc.name : 'Unknown Account';
-  };
+    if (!acc) return 'Unknown';
+    const typeMap = {
+      'BANK': 'Bank',
+      'CREDIT_CARD': 'CC',
+      'LOAN': 'Loan',
+      'EMI': 'EMI',
+      'INVESTMENT': 'Inv',
+      'SIP': 'SIP',
+      'BORROWED': 'Borrow',
+      'LENDED': 'Lend'
+    };
+    const label = typeMap[acc.type] || acc.type || 'Acc';
+    return `${acc.name} (${label})`;
+  }
 
-  const filteredTransactions = transactions.filter(tx => {
-    if (filterType !== 'ALL' && tx.type !== filterType) return false;
-    if (filterType === 'EXPENSE' && filterCategory !== 'ALL' && tx.categoryId !== filterCategory) return false;
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      const catName = getCategoryName(tx.categoryId).toLowerCase();
-      if (!tx.note?.toLowerCase().includes(q) && !catName.includes(q)) return false;
+  function getTransactionVisuals(tx) {
+    const type = tx.type;
+    const note = tx.note || '';
+
+    let color = '#64748b'; // Default System
+    let icon = Settings2;
+    let bgColor = '#64748b15';
+    let label = type;
+
+    if (type === 'INCOME') {
+      color = '#10b981'; // Emerald
+      icon = ArrowDownLeft;
+      bgColor = '#10b98115';
+      label = 'Income';
+    } else if (type === 'EXPENSE') {
+      color = '#e11d48'; // Rose
+      icon = ArrowUpRight;
+      bgColor = '#e11d4815';
+      label = getCategoryName(tx.categoryId) || 'Expense';
+    } else if (type === 'TRANSFER') {
+      color = '#0ea5e9'; // Sky
+      icon = RefreshCw;
+      bgColor = '#0ea5e915';
+      label = 'Transfer';
+    } else if (type === 'PAYMENT') {
+      color = '#6366f1'; // Indigo
+      icon = CreditCard;
+      bgColor = '#6366f115';
+      label = 'CC Bill Pay';
+    } else if (type === 'PAY_EMI' || type === 'REPAY_LOAN' || type === 'REPAY_BORROWED') {
+      color = '#f59e0b'; // Amber
+      icon = Landmark;
+      bgColor = '#f59e0b15';
+      label = type.replace(/_/g, ' ');
+    } else if (type === 'EMI_LIMIT_BLOCK') {
+      color = '#0ea5e9'; // Sky
+      icon = Landmark;
+      bgColor = '#0ea5e915';
+      label = 'CC Limit Block';
+    } else if (type === 'EMI_PAYMENT') {
+      color = '#6366f1'; // Indigo
+      icon = CreditCard;
+      bgColor = '#6366f115';
+      label = 'EMI Installment';
+    } else if (type === 'EMI_LIMIT_RECOVERY') {
+      color = '#10b981'; // Emerald
+      icon = RefreshCw;
+      bgColor = '#10b98115';
+      label = 'Limit Recovery';
+    } else if (type === 'FINE' || type === 'EMI_FINE') {
+      color = '#f97316'; // Orange
+      icon = ShieldAlert;
+      bgColor = '#f9731615';
+      label = 'Fine Paid';
+    } else if (type === 'SYSTEM') {
+      const isCredit = note.includes('returned') || note.includes('Deleted');
+      color = isCredit ? '#10b981' : '#64748b';
+      icon = Settings2;
+      bgColor = color + '15';
     }
-    return true;
-  });
 
-  // ── Delete ────────────────────────────────────────────────────────────────
-  const handleDelete = (item) => {
-    Alert.alert(
-      'Delete Transaction',
-      `This will reverse ₹${item.amount.toFixed(2)} back to "${getAccountName(item.accountId)}" and log a system record. Continue?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete & Revert',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteTransaction(activeUser.id, item);
-            setExpandedTxId(null);
-            loadData();
-          },
-        },
-      ]
+    return { color, icon, bgColor, label };
+  }
+
+  // ── Renderers ────────────────────────────────────────────────────────────
+  function renderSectionHeader({ section: { title } }) {
+    return (
+      <View style={[styles.sectionHeader, { backgroundColor: theme.surface + 'B0' }]}>
+        <Text style={[styles.sectionTitle, { color: theme.textSubtle, fontSize: fs(11) }]}>
+          {title}
+        </Text>
+      </View>
     );
-  };
+  }
 
-  // ── Edit save ─────────────────────────────────────────────────────────────
-  const handleEditSave = () => {
-    const newAmount = parseFloat(editAmount);
-    if (!newAmount || newAmount <= 0) return;
-    const newData = { ...editingTx, amount: newAmount, note: editNote };
-    const amountChanged = newAmount !== editingTx.amount;
-    const confirmMsg = amountChanged
-      ? `This will revert ₹${editingTx.amount.toFixed(2)} and apply ₹${newAmount.toFixed(2)} to "${getAccountName(editingTx.accountId)}". A system record will be logged. Continue?`
-      : `Update the note for this transaction? A system record will be logged.`;
-
-    Alert.alert('Confirm Edit', confirmMsg, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm & Save',
-        onPress: async () => {
-          await updateTransaction(activeUser.id, editingTx, newData);
-          setEditingTx(null);
-          setExpandedTxId(null);
-          loadData();
-        },
-      },
-    ]);
-  };
-
-
-  const openEdit = (item) => {
-    setEditingTx(item);
-    setEditAmount(item.amount.toString());
-    setEditNote(item.note || '');
-  };
-
-  // ── Render transaction card ───────────────────────────────────────────────
-  const renderTransaction = ({ item }) => {
-    const isSystem = item.type === 'SYSTEM';
-    const isPositive = item.type === 'INCOME';
-    const isTransfer = item.type === 'TRANSFER' || item.type === 'PAYMENT';
+  function renderTransaction({ item }) {
+    const { color, icon: Icon, bgColor, label } = getTransactionVisuals(item);
     const isExpanded = expandedTxId === item.id;
-
-    // For SYSTEM entries derive direction from note text
-    const systemIsCredit = isSystem && (item.note?.includes('returned') || item.note?.includes('Deleted'));
-    const systemIsDebit  = isSystem && item.note?.includes('deducted');
-
-    const amountColor = isSystem
-      ? (systemIsCredit ? theme.success : systemIsDebit ? theme.danger : theme.textMuted)
-      : isPositive ? theme.success
-      : isTransfer ? theme.textSubtle
-      : theme.danger;
-
-    const amountPrefix = isSystem
-      ? (systemIsCredit ? '+' : systemIsDebit ? '-' : '')
-      : isPositive ? '+' : isTransfer ? '' : '-';
+    const isSystem = item.type === 'SYSTEM';
+    const isIncome = item.type === 'INCOME' || (isSystem && (item.note?.includes('returned') || item.note?.includes('Deleted')));
+    const isTransfer = item.type === 'TRANSFER' || item.type === 'PAYMENT';
 
     return (
       <TouchableOpacity
         style={[
           styles.txCard,
-          { backgroundColor: isSystem ? theme.surfaceSoft : theme.surface },
-          isExpanded && { borderColor: theme.primary, borderWidth: 1 },
-          isSystem && { borderLeftWidth: 2, borderLeftColor: theme.textMuted },
+          { backgroundColor: theme.surface, borderColor: isExpanded ? color : theme.border + '15' },
+          isExpanded && { borderWidth: 1.5, shadowOpacity: 0.1, elevation: 4 }
         ]}
         onPress={() => setExpandedTxId(isExpanded ? null : item.id)}
         activeOpacity={0.7}
       >
-        <View style={styles.txHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {isSystem && <Settings2 size={12} color={theme.textMuted} />}
-            <Text style={[styles.txType, { color: isSystem ? theme.textMuted : theme.textMuted, fontSize: fs(12) }]}>
-              {item.type}
-            </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={[styles.txIconContainer, { backgroundColor: bgColor }]}>
+            <Icon size={20} color={color} strokeWidth={2.5} />
           </View>
-          <Text style={[styles.txDate, { color: theme.textSubtle, fontSize: fs(12) }]}>
-            {format(new Date(item.date), 'MMM dd, yyyy')}
-          </Text>
-        </View>
-
-        <View style={styles.txBody}>
-          <View style={styles.txLeft}>
-            <Text style={[styles.txNote, { color: isSystem ? theme.textMuted : theme.text, fontSize: fs(16) }]}
-              numberOfLines={isExpanded ? undefined : 1}>
+          
+          <View style={styles.txMainContent}>
+            <Text style={[styles.txNote, { color: theme.text, fontSize: fs(15) }]} numberOfLines={isExpanded ? undefined : 1}>
               {item.note || 'Untitled'}
             </Text>
-            {item.type === 'EXPENSE' && item.categoryId ? (
-              <Text style={[styles.txCat, { color: theme.primary, fontSize: fs(13) }]}>
-                {getCategoryName(item.categoryId)}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.txLabel, { color: color, fontSize: fs(10), fontWeight: '800', textTransform: 'uppercase' }]}>
+                {label}
               </Text>
-            ) : null}
+              <Text style={[styles.txDate, { color: theme.textSubtle, fontSize: fs(11) }]}>
+                • {getAccountDisplay(item.accountId)}
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.txAmount, { fontSize: fs(18), color: amountColor }]}>
-            {amountPrefix}₹{item.amount.toFixed(2)}
-          </Text>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.txAmount, { fontSize: fs(16), color: isIncome ? '#10b981' : (isTransfer ? theme.text : '#e11d48') }]}>
+              {isIncome ? '+' : (isTransfer ? '' : '-')}{getCurrencySymbol(activeUser?.currency)}{item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: fs(10), marginTop: 2 }}>
+              {formatInTZ(item.date, activeUser?.timezone, 'h:mm a')}
+            </Text>
+          </View>
         </View>
 
         {isExpanded && (
-          <View style={[styles.expandedDetails, { borderTopColor: theme.border }]}>
-            <View style={styles.expandedRow}>
-              <Text style={[styles.expandedLabel, { color: theme.textMuted, fontSize: fs(13) }]}>Account:</Text>
-              <Text style={[styles.expandedValue, { color: theme.text, fontSize: fs(13) }]}>{getAccountName(item.accountId)}</Text>
-            </View>
-            {(item.type === 'TRANSFER' || item.type === 'PAYMENT') && item.toAccountId && (
-              <View style={styles.expandedRow}>
-                <Text style={[styles.expandedLabel, { color: theme.textMuted, fontSize: fs(13) }]}>To Account:</Text>
-                <Text style={[styles.expandedValue, { color: theme.text, fontSize: fs(13) }]}>{getAccountName(item.toAccountId)}</Text>
+          <View style={[styles.expandedDetails, { backgroundColor: theme.isDark ? '#1e293b40' : '#f8fafc' }]}>
+            <View style={styles.expandedInfoSection}>
+              <View style={styles.expandedInfoRow}>
+                <View style={[styles.infoIconWrapper, { backgroundColor: theme.primarySoft }]}>
+                  <Landmark size={12} color={theme.primary} />
+                </View>
+                <Text style={[styles.expandedInfoLabel, { color: theme.textSubtle, fontSize: fs(12) }]}>Source Account</Text>
+                <Text style={[styles.expandedInfoValue, { color: theme.text, fontSize: fs(12) }]} numberOfLines={1}>{getAccountDisplay(item.accountId)}</Text>
               </View>
-            )}
-            <View style={styles.expandedRow}>
-              <Text style={[styles.expandedLabel, { color: theme.textMuted, fontSize: fs(13) }]}>Time:</Text>
-              <Text style={[styles.expandedValue, { color: theme.text, fontSize: fs(13) }]}>{format(new Date(item.date), 'hh:mm a')}</Text>
+
+              {item.linkedItemId && (
+                <View style={styles.expandedInfoRow}>
+                  <View style={[styles.infoIconWrapper, { backgroundColor: '#f59e0b20' }]}>
+                    <Link size={12} color="#f59e0b" />
+                  </View>
+                  <Text style={[styles.expandedInfoLabel, { color: theme.textSubtle, fontSize: fs(12) }]}>Linked To</Text>
+                  <Text style={[styles.expandedInfoValue, { color: theme.text, fontSize: fs(12) }]} numberOfLines={1}>{getAccountDisplay(item.linkedItemId)}</Text>
+                </View>
+              )}
+
+              {(item.type === 'TRANSFER' || item.type === 'PAYMENT' || item.type === 'EMI_PAYMENT' || item.type === 'EMI_LIMIT_RECOVERY') && item.toAccountId && (
+                <View style={styles.expandedInfoRow}>
+                  <View style={[styles.infoIconWrapper, { backgroundColor: '#10b98115' }]}>
+                    <CornerDownRight size={12} color="#10b981" />
+                  </View>
+                  <Text style={[styles.expandedInfoLabel, { color: theme.textSubtle, fontSize: fs(12) }]}>Destination</Text>
+                  <Text style={[styles.expandedInfoValue, { color: theme.text, fontSize: fs(12) }]} numberOfLines={1}>{getAccountDisplay(item.toAccountId)}</Text>
+                </View>
+              )}
+
+              <View style={styles.expandedInfoRow}>
+                <View style={[styles.infoIconWrapper, { backgroundColor: '#94a3b815' }]}>
+                  <Clock size={12} color="#64748b" />
+                </View>
+                <Text style={[styles.expandedInfoLabel, { color: theme.textSubtle, fontSize: fs(12) }]}>Transaction Time</Text>
+                <Text style={[styles.expandedInfoValue, { color: theme.text, fontSize: fs(12) }]}>{formatInTZ(item.date, activeUser?.timezone, 'hh:mm a')}</Text>
+              </View>
             </View>
 
-            {/* Edit / Delete — only for non-system transactions */}
-            {!isSystem && (
-              <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
+            {!isSystem && item.type !== 'EMI_LIMIT_BLOCK' && item.type !== 'EMI_PAYMENT' && item.type !== 'EMI_LIMIT_RECOVERY' && (
+              <View style={[styles.actionRow, { borderTopColor: theme.border + '30' }]}>
+                <View style={{ flex: 1 }} />
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.primarySoft }]}
+                  style={[styles.actionIconButton, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}
                   onPress={() => openEdit(item)}
                 >
                   <Pencil size={14} color={theme.primary} />
-                  <Text style={[styles.actionBtnText, { color: theme.primary, fontSize: fs(13) }]}>Edit</Text>
+                  <Text style={[styles.iconButtonLabel, { color: theme.primary, fontSize: fs(9) }]}>Edit</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.isDark ? '#3b1010' : '#fef2f2' }]}
+                  style={[styles.actionIconButton, { backgroundColor: theme.danger + '10', borderColor: theme.danger + '20' }]}
                   onPress={() => handleDelete(item)}
                 >
                   <Trash2 size={14} color={theme.danger} />
-                  <Text style={[styles.actionBtnText, { color: theme.danger, fontSize: fs(13) }]}>Delete & Revert</Text>
+                  <Text style={[styles.iconButtonLabel, { color: theme.danger, fontSize: fs(9) }]}>Revert</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -241,54 +289,212 @@ export default function TransactionsList({ navigation }) {
         )}
       </TouchableOpacity>
     );
+  }
+
+  // ── Logic ────────────────────────────────────────────────────────────────
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase();
+        const matches = (tx.note || '').toLowerCase().includes(q) || 
+                      getCategoryName(tx.categoryId).toLowerCase().includes(q) || 
+                      getAccountDisplay(tx.accountId).toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      if (filters.type !== 'ALL' && tx.type !== filters.type) return false;
+      if (filters.date && !isSameDay(new Date(tx.date), new Date(filters.date))) return false;
+      if (filters.month && !filters.date) {
+        if (format(new Date(tx.date), 'yyyy-MM') !== filters.month) return false;
+      }
+      if (filters.accountId !== 'ALL' && tx.accountId !== filters.accountId) return false;
+      if (filters.accountType !== 'ALL') {
+        const acc = accounts.find(a => a.id === tx.accountId);
+        if (!acc || acc.type !== filters.accountType) return false;
+      }
+      return true;
+    });
+  }, [transactions, searchQuery, filters, accounts, categories]);
+
+  const groupedTransactions = useMemo(() => {
+    const groups = {};
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+
+    filteredTransactions.forEach(tx => {
+      const txDate = new Date(tx.date); txDate.setHours(0,0,0,0);
+      let title = format(txDate, 'MMMM dd, yyyy');
+      if (txDate.getTime() === today.getTime()) title = 'Today';
+      else if (txDate.getTime() === yesterday.getTime()) title = 'Yesterday';
+      if (!groups[title]) groups[title] = [];
+      groups[title].push(tx);
+    });
+
+    return Object.keys(groups).map(title => ({ title, data: groups[title] }));
+  }, [filteredTransactions]);
+
+  const activeChips = getActiveFilterChips();
+
+  function getActiveFilterChips() {
+    const chips = [];
+    if (filters.type !== 'ALL') chips.push({ id: 'type', label: `Type: ${filters.type.replace(/_/g, ' ')}` });
+    if (filters.month) chips.push({ id: 'month', label: format(new Date(filters.month + '-02'), 'MMM yyyy') });
+    if (filters.date) chips.push({ id: 'date', label: format(new Date(filters.date), 'MMM dd') });
+    if (filters.accountId !== 'ALL') {
+      const acc = accounts.find(a => a.id === filters.accountId);
+      if (acc) chips.push({ id: 'accountId', label: `Acc: ${acc.name}` });
+    }
+    if (filters.accountType !== 'ALL') chips.push({ id: 'accountType', label: `For: ${filters.accountType}` });
+    return chips;
+  }
+
+  const removeFilter = (key) => setFilters(prev => ({ ...prev, [key]: (key === 'type' || key === 'accountId' || key === 'accountType' ? 'ALL' : null) }));
+  const openEdit = (item) => { setEditingTx(item); setEditAmount(item.amount.toString()); setEditNote(item.note || ''); };
+  const handleDelete = (item) => { setTxToDelete(item); setPinValue(''); setPinError(''); setShowPinModal(true); };
+
+  const confirmSecureDelete = async () => {
+    if (pinValue !== activeUser.pin) { setPinError('Incorrect PIN'); setPinValue(''); return; }
+    if (!txToDelete) return;
+    try {
+      await deleteTransaction(activeUser.id, txToDelete);
+      setShowPinModal(false); setTxToDelete(null); setExpandedTxId(null); loadData();
+    } catch (error) { Alert.alert('Error', 'Failed to delete transaction.'); }
+  };
+
+  const handleEditSave = () => {
+    const newAmount = parseFloat(editAmount);
+    if (!newAmount || newAmount <= 0) return;
+    const newData = { ...editingTx, amount: newAmount, note: editNote };
+    Alert.alert('Confirm Edit', 'Save changes to this transaction?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Confirm', onPress: async () => { await updateTransaction(activeUser.id, editingTx, newData, getCurrencySymbol(activeUser?.currency)); setEditingTx(null); setExpandedTxId(null); loadData(); } }
+    ]);
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <CustomHeader 
+        title="Transactions"
+        theme={theme}
+        fs={fs}
+        showProfile={true}
+        onProfilePress={() => setIsSettingsOpen(true)}
+      />
 
-      <View style={[styles.filtersContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 12 }}>
-          <CustomDropdown
-            containerStyle={{ flex: 1, marginBottom: 0 }}
-            selectedValue={filterType}
-            onSelect={(val) => { setFilterType(val); setFilterCategory('ALL'); setVisibleCount(20); }}
-            options={[
-              { label: 'All Types', value: 'ALL' },
-              { label: 'Expense', value: 'EXPENSE' },
-              { label: 'Income', value: 'INCOME' },
-              { label: 'Transfer', value: 'TRANSFER' },
-              { label: 'CC Pay', value: 'PAYMENT' },
-              { label: 'System', value: 'SYSTEM' },
-            ]}
-          />
-          {filterType === 'EXPENSE' && categories.length > 0 && (
-            <CustomDropdown
-              containerStyle={{ flex: 1, marginBottom: 0 }}
-              selectedValue={filterCategory}
-              onSelect={(val) => { setFilterCategory(val); setVisibleCount(20); }}
-              options={[
-                { label: 'All Categories', value: 'ALL' },
-                ...categories.map(c => ({ label: c.name, value: c.id }))
-              ]}
-            />
-          )}
-        </View>
-      </View>
+      <TouchableOpacity 
+        style={[styles.floatingFilterBtn, { 
+          backgroundColor: activeChips.length > 0 ? theme.primary : theme.surface,
+          borderColor: theme.border,
+          borderWidth: activeChips.length > 0 ? 0 : 1,
+          top: insets.top + 18 
+        }]}
+        onPress={() => setShowFilterModal(true)}
+      >
+        <Filter size={16} color={activeChips.length > 0 ? '#FFF' : theme.text} strokeWidth={2.5} />
+        {activeChips.length > 0 && <View style={[styles.floatingBadge, { backgroundColor: '#FFF' }]} />}
+      </TouchableOpacity>
 
-      <FlatList
-        data={filteredTransactions.slice(0, visibleCount)}
-        keyExtractor={item => item.id}
+      <TouchableOpacity 
+        style={[styles.floatingSearchBtn, { 
+          backgroundColor: showSearch ? theme.transfer : theme.surface,
+          borderColor: theme.border,
+          borderWidth: showSearch ? 0 : 1,
+          top: insets.top + 18 
+        }]}
+        onPress={() => { setShowSearch(!showSearch); if(showSearch) setSearchQuery(''); }}
+      >
+        <Search size={16} color={showSearch ? '#FFF' : theme.text} strokeWidth={2.5} />
+      </TouchableOpacity>
+
+
+      <SectionList
+        sections={groupedTransactions.slice(0, visibleCount)}
+        keyExtractor={(item) => item.id}
         renderItem={renderTransaction}
-        contentContainerStyle={styles.listContent}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled={true}
+        ListHeaderComponent={
+          (showSearch || activeChips.length > 0) ? (
+            <View style={[styles.headerActions, { borderBottomColor: theme.border + '15', borderBottomWidth: 1 }]}>
+              {showSearch && (
+                <View style={styles.searchContainer}>
+                  <View style={[styles.searchInputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                    <Search size={16} color={theme.textSubtle} />
+                    <TextInput
+                      style={[styles.searchInputField, { color: theme.text, fontSize: fs(14) }]}
+                      placeholder="Search notes, accounts, labels..."
+                      placeholderTextColor={theme.placeholder}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      autoFocus
+                      onSubmitEditing={() => setShowSearch(false)}
+                    />
+                    {searchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <X size={16} color={theme.textSubtle} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+              {activeChips.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
+                  {activeChips.map(chip => (
+                    <TouchableOpacity 
+                      key={chip.id} 
+                      style={[styles.chip, { backgroundColor: theme.primary + '11', borderColor: theme.primary + '40' }]}
+                      onPress={() => removeFilter(chip.id)}
+                    >
+                      <Text style={[styles.chipText, { color: theme.primary, fontSize: fs(10) }]}>{chip.label.toUpperCase()}</Text>
+                      <X size={10} color={theme.primary} />
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity 
+                    onPress={() => { setSearchQuery(''); setFilters({ type: 'ALL', accountId: 'ALL', accountType: 'ALL', month: null, date: null }); }}
+                    style={styles.clearAllBtn}
+                  >
+                    <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: '700' }}>CLEAR ALL</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+            </View>
+          ) : null
+        }
         onEndReached={() => {
-          if (visibleCount < filteredTransactions.length) setVisibleCount(prev => prev + 20);
+          if (visibleCount < groupedTransactions.length) setVisibleCount(visibleCount + 20);
         }}
         onEndReachedThreshold={0.5}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={10}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyStateText, { color: theme.textSubtle }]}>No transactions found.</Text>
+          <View style={styles.emptyContainer}>
+            <View style={[styles.emptyIconContainer, { backgroundColor: theme.surfaceMuted }]}>
+              <Search size={40} color={theme.textSubtle} />
+            </View>
+            <Text style={[styles.emptyText, { color: theme.text, fontSize: fs(18) }]}>No transactions found</Text>
+            <Text style={[styles.emptySubtext, { color: theme.textSubtle, fontSize: fs(14) }]}>Try adjusting your search or filters.</Text>
+            {(searchQuery || activeChips.length > 0) && (
+              <TouchableOpacity 
+                style={[styles.resetBtn, { backgroundColor: theme.primary }]}
+                onPress={() => { setSearchQuery(''); setFilters({ type: 'ALL', accountId: 'ALL', accountType: 'ALL', month: null, date: null }); }}
+              >
+                <Text style={{ color: 'white', fontWeight: '800' }}>Reset Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
+      />
+
+      <TransactionsFilterModal 
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        setFilters={setFilters}
+        accounts={accounts}
+        theme={theme}
+        fs={fs}
+        insets={insets}
       />
 
       {/* Edit Transaction Modal */}
@@ -302,7 +508,7 @@ export default function TransactionsList({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.editLabel, { color: theme.textMuted, fontSize: fs(13) }]}>Amount (₹)</Text>
+            <Text style={[styles.editLabel, { color: theme.textMuted, fontSize: fs(13) }]}>Amount ({getCurrencySymbol(activeUser?.currency)})</Text>
             <TextInput
               style={[styles.editInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border, fontSize: fs(28) }]}
               keyboardType="numeric"
@@ -323,69 +529,128 @@ export default function TransactionsList({ navigation }) {
               multiline
             />
 
-            {editingTx && parseFloat(editAmount) !== editingTx.amount && (
-              <View style={[styles.diffBanner, { backgroundColor: theme.primarySoft }]}>
-                <Text style={[styles.diffText, { color: theme.primary, fontSize: fs(13) }]}>
-                  ₹{editingTx.amount.toFixed(2)} → ₹{parseFloat(editAmount || 0).toFixed(2)} · Difference will be reverted to account
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={[styles.editSaveBtn, { backgroundColor: theme.primary }]}
-              onPress={handleEditSave}
-            >
+            <TouchableOpacity style={[styles.editSaveBtn, { backgroundColor: theme.primary }]} onPress={handleEditSave}>
               <Text style={[styles.editSaveBtnText, { fontSize: fs(16) }]}>Save & Adjust Balance</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
-  );
-}
+
+      {/* PIN VERIFICATION MODAL */}
+      <Modal visible={showPinModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 28, width: '100%', maxWidth: 400 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: theme.danger + '15', justifyContent: 'center', alignItems: 'center' }}>
+                <ShieldAlert color={theme.danger} size={22} />
+              </View>
+              <Text style={{ color: theme.text, fontSize: fs(18), fontWeight: '900' }}>Confirm Action</Text>
+            </View>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(13), marginBottom: 20, lineHeight: 18 }}>
+              This will revert <Text style={{ color: theme.text, fontWeight: '700' }}>{getCurrencySymbol(activeUser?.currency)}{txToDelete?.amount?.toLocaleString()}</Text> back to account. Enter your 4-digit PIN to authorize this change.
+            </Text>
+            <TextInput 
+              style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: pinError ? theme.danger : theme.border, borderRadius: 16, padding: 14, fontSize: fs(22), color: theme.text, letterSpacing: 12, textAlign: 'center', marginBottom: 8, fontWeight: '900' }} 
+              keyboardType="numeric" maxLength={4} secureTextEntry value={pinValue} onChangeText={(v) => { setPinValue(v); setPinError(''); }} placeholder="••••" placeholderTextColor={theme.textMuted} autoFocus 
+            />
+            {pinError ? <Text style={{ color: theme.danger, fontSize: fs(12), marginBottom: 16, textAlign: 'center', fontWeight: '600' }}>{pinError}</Text> : <View style={{ height: 16 }} />}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={{ flex: 1, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }} onPress={() => setShowPinModal(false)}>
+                <Text style={{ color: theme.textSubtle, fontWeight: '800', fontSize: fs(14) }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, padding: 14, borderRadius: 14, backgroundColor: theme.danger, alignItems: 'center', elevation: 4 }} onPress={confirmSecureDelete}>
+                <Text style={{ color: 'white', fontWeight: '900', fontSize: fs(14) }}>Revert Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      </View>
+    );
+  }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
-  title: { fontSize: 24, fontWeight: 'bold' },
-  iconBtn: { padding: 4 },
-  fabBtn: {
-    position: 'absolute', bottom: 24, right: 24,
-    width: 60, height: 60, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
-    shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5, zIndex: 1000,
-  },
-  filtersContainer: { paddingVertical: 12, borderBottomWidth: 1 },
-  listContent: { padding: 16, paddingBottom: 100 },
-  txCard: { padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
-  txHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  txType: { fontWeight: 'bold', letterSpacing: 0.5 },
-  txDate: {},
-  txBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  txLeft: { flex: 1, paddingRight: 16 },
-  txNote: { fontWeight: '600', marginBottom: 4 },
-  txCat: { fontWeight: '500' },
-  txAmount: { fontWeight: 'bold' },
-  expandedDetails: { marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
-  expandedRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  expandedLabel: { fontWeight: '500' },
-  expandedValue: { fontWeight: '600' },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
-  actionBtnText: { fontWeight: '600' },
-  emptyState: { alignItems: 'center', marginTop: 40 },
-  emptyStateText: { fontStyle: 'italic' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1 },
+  headerActions: { borderBottomWidth: 1 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
+  headerTitle: { fontWeight: '900', letterSpacing: -0.5 },
+  headerButtons: { flexDirection: 'row', gap: 10 },
+  headerIconBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, borderWidth: 2, borderColor: '#fff' },
+  searchContainer: { paddingHorizontal: 20, paddingVertical: 12 },
+  searchInputWrapper: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, gap: 10 },
+  searchInputField: { flex: 1, fontWeight: '600' },
+  chipsContainer: { paddingHorizontal: 20, gap: 8, paddingVertical: 12 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  chipText: { fontWeight: '800', letterSpacing: 0.5 },
+  clearAllBtn: { paddingHorizontal: 10, justifyContent: 'center' },
+  txCard: { padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  txIconContainer: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  txMainContent: { flex: 1, justifyContent: 'center' },
+  txNote: { fontWeight: '800', marginBottom: 2, letterSpacing: -0.3 },
+  txLabel: { letterSpacing: 0.5 },
+  txDate: { fontWeight: '600' },
+  txAmount: { fontWeight: '900', letterSpacing: -0.5 },
+  expandedDetails: { marginTop: 8, padding: 12, borderTopWidth: 1, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  expandedInfoSection: { gap: 8, marginBottom: 8 },
+  expandedInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoIconWrapper: { width: 22, height: 22, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+  expandedInfoLabel: { width: 110, fontWeight: '500' },
+  expandedInfoValue: { flex: 1, fontWeight: '600', textAlign: 'right' },
+  actionRow: { flexDirection: 'row', gap: 12, marginTop: 4, paddingTop: 10, borderTopWidth: 1, alignItems: 'center' },
+  actionIconButton: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: 54, height: 42, borderRadius: 10, borderWidth: 1, gap: 3 },
+  iconButtonLabel: { fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
+  sectionHeader: { paddingHorizontal: 20, paddingVertical: 6, borderRadius: 8, marginTop: 0, marginBottom: 8 },
+  sectionTitle: { fontWeight: '900', letterSpacing: 0.5, textTransform: 'uppercase' },
+  emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
+  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  emptyText: { fontWeight: '900', marginBottom: 8 },
+  emptySubtext: { textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  resetBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, borderBottomWidth: 1 },
   modalTitle: { fontWeight: 'bold' },
-  closeBtn: { padding: 4 },
-  // Edit sheet
   editOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  editSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
-  editLabel: { fontWeight: '600', marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
-  editInput: { borderWidth: 1, borderRadius: 14, padding: 16, fontWeight: 'bold' },
-  editInputNote: { borderWidth: 1, borderRadius: 14, padding: 14, minHeight: 60 },
-  diffBanner: { marginTop: 14, padding: 12, borderRadius: 10 },
-  diffText: { fontWeight: '500', textAlign: 'center' },
-  editSaveBtn: { marginTop: 20, padding: 16, borderRadius: 14, alignItems: 'center' },
-  editSaveBtnText: { color: 'white', fontWeight: 'bold' },
+  editSheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: (Platform.OS === 'ios' ? 40 : 20) },
+  editLabel: { fontWeight: '800', marginTop: 16, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  editInput: { borderWidth: 1, borderRadius: 16, padding: 20, fontWeight: '900' },
+  editInputNote: { borderWidth: 1, borderRadius: 16, padding: 16, minHeight: 80, marginBottom: 20 },
+  editSaveBtn: { padding: 18, borderRadius: 16, alignItems: 'center', elevation: 4 },
+  editSaveBtnText: { color: 'white', fontWeight: '900' },
+  floatingFilterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 16,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    zIndex: 25
+  },
+  floatingSearchBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 60,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    zIndex: 25
+  },
+  floatingBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  }
 });
+

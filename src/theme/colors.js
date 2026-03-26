@@ -12,6 +12,7 @@ export const lightTheme = {
   success: '#10b981',
   danger: '#ef4444',
   transfer: '#8b5cf6',
+  placeholder: '#9ca3af',
   isDark: false,
 };
 
@@ -29,5 +30,6 @@ export const darkTheme = {
   success: '#34d399',
   danger: '#f87171',
   transfer: '#a78bfa',
+  placeholder: '#94a3b8',
   isDark: true,
 };

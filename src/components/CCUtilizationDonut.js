@@ -4,23 +4,21 @@ import Svg, { G, Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getCurrencySymbol } from '../utils/currencyUtils';
-import { getMonthlyCategorySplit } from '../services/storage';
+import { getCCUtilizationByMonth } from '../services/storage';
 
 const { width } = Dimensions.get('window');
-const SLIDE_WIDTH = width - 32; // Full width minus container padding
+const SLIDE_WIDTH = width - 32;
 
-const MonthPiePage = ({ userId, monthKey, label, year }) => {
+const CCDonutPage = ({ userId, monthKey, label, year }) => {
   const { theme, fs } = useTheme();
   const { activeUser } = useAuth();
   const [data, setData] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [activeCategory, setActiveCategory] = useState(null); // { name, amount, color }
+  const [activeCard, setActiveCard] = useState(null); // { id, name, used, limit, color }
 
   useEffect(() => {
     const loadData = async () => {
-      const split = await getMonthlyCategorySplit(userId, monthKey);
-      setData(split);
-      setTotal(split.reduce((sum, item) => sum + item.amount, 0));
+      const utilData = await getCCUtilizationByMonth(userId, monthKey);
+      setData(utilData);
     };
     loadData();
   }, [userId, monthKey]);
@@ -28,46 +26,68 @@ const MonthPiePage = ({ userId, monthKey, label, year }) => {
   if (data.length === 0) {
     return (
       <View style={[styles.page, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: theme.textMuted, fontStyle: 'italic', fontSize: fs(14) }}>No expenses for {label} {year}</Text>
+        <Text style={{ color: theme.textMuted, fontStyle: 'italic', fontSize: fs(14) }}>No CC utilization for {label} {year}</Text>
+      </View>
+    );
+  }
+
+  const totalUsed = data.reduce((sum, item) => sum + item.used, 0);
+  const totalLimit = data.reduce((sum, item) => sum + item.limit, 0);
+  
+  if (totalUsed === 0) {
+    return (
+      <View style={[styles.page, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: theme.textMuted, fontStyle: 'italic', fontSize: fs(14) }}>No CC expenses for {label} {year}</Text>
       </View>
     );
   }
 
   const radius = 60;
   const circumference = 2 * Math.PI * radius;
+  const totalForChart = totalUsed; // Donut represents total CC expenses
   let cumulativePercentage = 0;
+
+  // We show used vs available in the donut.
+  // Actually, the user wants "utilisation across all cards and utilisation for each card in different color".
+  // This implies the donut is made of usage slices.
+  // If we have total limit 100k, and Card A uses 10k, Card B uses 5k.
+  // The donut should probably show the 10k, 5k and then the remaining 85k as "Available".
+
+  const segments = data.filter(d => d.used > 0);
 
   return (
     <View style={styles.page}>
-      <Text style={[styles.pageTitle, { color: theme.text, fontSize: fs(16) }]}>{label} {year} Expenses</Text>
+      <Text style={[styles.pageTitle, { color: theme.text, fontSize: fs(16) }]}>CC Utilization ({label} {year})</Text>
       
       <View style={styles.chartContainer}>
         <View style={styles.svgWrapper}>
           <Svg width={120} height={120} viewBox="0 0 140 140">
             <G rotation="-90" origin="70, 70">
-              <Circle cx="70" cy="70" r={radius} stroke={theme.border} strokeWidth="12" fill="none" />
-              {data.map((seg, i) => {
-                const percentage = (seg.amount / total) * 100;
-                const strokeDashoffset = circumference - (circumference * percentage) / 100;
+              <Circle key="bg" cx="70" cy="70" r={radius} stroke={theme.border} strokeWidth="12" fill="none" opacity={0.3} />
+              {segments.map((seg, i) => {
+                // Percentage of TOTAL CC EXPENSES, not limit
+                const actualPercentage = (seg.used / totalForChart) * 100;
+                const visualPercentage = Math.max(actualPercentage, 2); // Minimum visibility 2%
+                
+                const dashLen = (circumference * visualPercentage) / 100;
                 const rotation = (cumulativePercentage / 100) * 360;
-                cumulativePercentage += percentage;
+                cumulativePercentage += visualPercentage;
                 
                 return (
                   <Circle
-                    key={i}
+                    key={seg.id || i}
                     cx="70"
                     cy="70"
                     r={radius}
                     stroke={seg.color}
-                    strokeWidth="12"
-                    strokeDasharray={`${circumference} ${circumference}`}
-                    strokeDashoffset={strokeDashoffset}
+                    strokeWidth="14" // Slightly thicker than background
+                    strokeDasharray={`${dashLen} ${circumference}`}
+                    strokeDashoffset={0}
                     fill="none"
-                    strokeLinecap="round"
                     transform={`rotate(${rotation}, 70, 70)`}
                     onPress={() => {
-                      if (activeCategory?.name === seg.category) setActiveCategory(null);
-                      else setActiveCategory({ name: seg.category, amount: seg.amount, color: seg.color });
+                      if (activeCard?.id === seg.id) setActiveCard(null);
+                      else setActiveCard(seg);
                     }}
                   />
                 );
@@ -75,11 +95,11 @@ const MonthPiePage = ({ userId, monthKey, label, year }) => {
             </G>
           </Svg>
           <View style={styles.centerText}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(10), textAlign: 'center' }}>
-              {activeCategory ? activeCategory.name : 'Total'}
+            <Text style={{ color: theme.textSubtle, fontSize: fs(9), textAlign: 'center' }}>
+              {activeCard ? activeCard.name : 'Total Usage'}
             </Text>
-            <Text style={{ color: theme.text, fontSize: fs(activeCategory ? 12 : 14), fontWeight: 'bold', textAlign: 'center' }} numberOfLines={1}>
-              {getCurrencySymbol(activeUser?.currency)}{Math.round(activeCategory ? activeCategory.amount : total)}
+            <Text style={{ color: theme.text, fontSize: fs(18), fontWeight: 'bold', textAlign: 'center' }}>
+              {getCurrencySymbol(activeUser?.currency)}{Math.round(activeCard ? activeCard.used : totalUsed)}
             </Text>
           </View>
         </View>
@@ -91,14 +111,19 @@ const MonthPiePage = ({ userId, monthKey, label, year }) => {
                 key={i} 
                 style={styles.legendItem}
                 onPress={() => {
-                  if (activeCategory?.name === item.category) setActiveCategory(null);
-                  else setActiveCategory({ name: item.category, amount: item.amount, color: item.color });
+                  if (activeCard?.id === item.id) setActiveCard(null);
+                  else setActiveCard(item);
                 }}
               >
                 <View style={[styles.dot, { backgroundColor: item.color }]} />
-                <Text style={[styles.legendText, { color: theme.textMuted, fontSize: fs(11) }]}>
-                  {item.category}: {getCurrencySymbol(activeUser?.currency)}{Math.round(item.amount)}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.legendText, { color: theme.text, fontSize: fs(11) }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: fs(9) }}>
+                    {getCurrencySymbol(activeUser?.currency)}{Math.round(item.used)}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -108,32 +133,36 @@ const MonthPiePage = ({ userId, monthKey, label, year }) => {
   );
 };
 
-export default function MonthlyCategorySplit({ userId, availableMonths }) {
+export default function CCUtilizationDonut({ userId, availableMonths }) {
   const { theme, fs } = useTheme();
   const flatListRef = React.useRef(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-
+  
   const currentMonthKey = new Date().toISOString().substring(0, 7);
   
-  const monthsData = availableMonths.map(mKey => {
-    const dateObj = new Date(parseInt(mKey.split('-')[0]), parseInt(mKey.split('-')[1]) - 1, 1);
+  // Create a 12-month window (6 months before, current, 5 months after)
+  const windowMonths = [];
+  const now = new Date();
+  for (let i = -6; i <= 5; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    windowMonths.push(d.toISOString().substring(0, 7));
+  }
+
+  // Merge with availableMonths and sort/deduplicate
+  const allMonths = [...new Set([...windowMonths, ...availableMonths])].sort();
+
+  // Month keys are YYYY-MM
+  const monthsData = allMonths.map(mKey => {
+    const [y, m] = mKey.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, 1);
     return {
       monthKey: mKey,
-      label: dateObj.toLocaleString('default', { month: 'long' }),
-      year: mKey.split('-')[0]
+      label: dateObj.toLocaleString('default', { month: 'short' }),
+      year: y.toString()
     };
-  }); // Chronological order
+  });
 
-  useEffect(() => {
-    const initialIndex = monthsData.findIndex(m => m.monthKey === currentMonthKey);
-    if (initialIndex !== -1) {
-      setActiveIndex(initialIndex);
-      // Small delay to ensure layout is ready
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
-      }, 100);
-    }
-  }, []);
+  const initialIndex = monthsData.findIndex(m => m.monthKey === currentMonthKey);
+  const [activeIndex, setActiveIndex] = useState(initialIndex !== -1 ? initialIndex : 0);
 
   const onScroll = (event) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SLIDE_WIDTH);
@@ -153,13 +182,14 @@ export default function MonthlyCategorySplit({ userId, availableMonths }) {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        initialScrollIndex={initialIndex !== -1 ? initialIndex : 0}
         getItemLayout={(data, index) => ({
           length: SLIDE_WIDTH,
           offset: SLIDE_WIDTH * index,
           index,
         })}
         renderItem={({ item }) => (
-          <MonthPiePage 
+          <CCDonutPage 
             userId={userId} 
             monthKey={item.monthKey} 
             label={item.label} 
@@ -197,6 +227,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 10,
+    elevation: 2,
     overflow: 'hidden',
     paddingBottom: 16
   },
@@ -225,7 +256,8 @@ const styles = StyleSheet.create({
   },
   centerText: {
     position: 'absolute',
-    alignItems: 'center'
+    alignItems: 'center',
+    width: 80
   },
   legend: {
     flex: 1,
@@ -235,7 +267,8 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10
+    gap: 10,
+    marginBottom: 8
   },
   dot: {
     width: 8,
@@ -243,7 +276,6 @@ const styles = StyleSheet.create({
     borderRadius: 4
   },
   legendText: {
-    flex: 1,
     fontWeight: '500'
   },
   pagination: {

@@ -1,38 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { getAccounts, saveTransaction, saveEmi, payEmi, payExpectedExpense, getEmis, getExpectedExpenses, getCategories, saveCategory } from '../services/storage';
-import { format, addMonths } from 'date-fns';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { addMonths, format } from 'date-fns';
+import { Check, Info, X } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CustomHeader from '../components/CustomHeader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import DatePicker from '../components/DatePicker';
+import {
+  getAccounts,
+  getCategories,
+  getEmis, getExpectedExpenses,
+  payEmi, payExpectedExpense,
+  saveCategory,
+  saveEmi,
+  saveTransaction,
+  ensureSystemCategories
+} from '../services/storage';
+import { toUTC } from '../utils/dateUtils';
 
-import CustomDropdown from '../components/CustomDropdown';
-import { 
-  X, Check, TrendingDown, TrendingUp, ArrowRightLeft, 
-  Wallet, Tag, Calendar, Clock, Landmark, Info, Plus 
-} from 'lucide-react-native';
+// Modular Components
+import AmountHero from '../components/transactions/AmountHero';
+import {
+  AccountCategoryFields,
+  EmiDetailsEntry, NoteDateFields,
+  TransferDetails,
+  UpcomingSettleFields
+} from '../components/transactions/TransactionFields';
+import TypeSelector from '../components/transactions/TypeSelector';
+import { validateTransaction } from '../utils/transactionValidation';
 
 const TRANSACTION_TYPES = [
-  { label: 'Expense',          value: 'EXPENSE',           icon: TrendingDown,   color: '#ef4444' },
-  { label: 'Income',           value: 'INCOME',            icon: TrendingUp,     color: '#10b981' },
-  { label: 'Transfer',         value: 'TRANSFER',          icon: ArrowRightLeft, color: '#3b82f6' },
-  { label: 'CC Pay',           value: 'PAYMENT',           icon: ArrowRightLeft, color: '#8b5cf6' },
-  { label: 'Repay Loan',       value: 'REPAY_LOAN',        icon: Landmark,       color: '#f59e0b' },
-  { label: 'Pay Borrowed',     value: 'PAY_BORROWED',      icon: Landmark,       color: '#f59e0b' },
-  { label: 'Lend Money',       value: 'LEND_MONEY',        icon: Wallet,         color: '#ec4899' },
-  { label: 'Collect Repay',    value: 'COLLECT_REPAYMENT', icon: Wallet,         color: '#10b981' },
-  { label: 'EMI',              value: 'EMI',               icon: Clock,          color: '#ec4899' },
-  { label: 'Upcoming',         value: 'PAY_UPCOMING',      icon: Clock,          color: '#6366f1' },
+  { label: 'Expense', value: 'EXPENSE', color: '#ef4444' },
+  { label: 'Income', value: 'INCOME', color: '#10b981' },
+  { label: 'Transfer', value: 'TRANSFER', color: '#3b82f6' },
+  { label: 'CC Pay', value: 'CC_PAY', color: '#8b5cf6' },
 ];
 
 export default function AddTransaction({ onClose, route }) {
   const { activeUser } = useAuth();
-  const { theme } = useTheme();
+  const { theme, fs } = useTheme();
   const navigation = useNavigation();
+
   const [accounts, setAccounts] = useState([]);
-  
   const [type, setType] = useState('EXPENSE');
   const [lockedType, setLockedType] = useState(false);
   const [amount, setAmount] = useState('');
@@ -42,58 +51,53 @@ export default function AddTransaction({ onClose, route }) {
   const [date, setDate] = useState(new Date());
   const [tenure, setTenure] = useState('');
   const [interestRate, setInterestRate] = useState('');
-  
-  // Category state
+  const [serviceCharge, setServiceCharge] = useState('');
+  const [taxPercentage, setTaxPercentage] = useState('');
+
   const [categories, setCategories] = useState([]);
   const [categoryId, setCategoryId] = useState(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  
-  // Pay upcoming state
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' });
+
   const [upcomingItems, setUpcomingItems] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [selectedUpcomingId, setSelectedUpcomingId] = useState(null);
   const [upcomingType, setUpcomingType] = useState('EXPENSE');
 
-  useFocusEffect(
-    React.useCallback(() => {
-      loadAccounts();
-      if (route?.params?.type) {
-        setType(route.params.type);
-        setLockedType(!!route.params.locked);
-      } else {
-        setLockedType(false);
-      }
-    }, [route?.params, loadAccounts])
-  );
-
-  const loadAccounts = async () => {
-    const data = await getAccounts(activeUser.id);
-    setAccounts(data);
-    if (data.length > 0 && !accountId) {
-      setAccountId(data[0].id);
-    }
-    
-    const fetchedEmis = await getEmis(activeUser.id);
-    const activeEmis = fetchedEmis.filter(e => e.paidMonths < e.tenure).map(e => ({ ...e, itemType: 'EMI' }));
-    
-    const expected = await getExpectedExpenses(activeUser.id);
-    const activeExpected = expected.filter(e => e.isDone === 0).map(e => ({ ...e, itemType: 'EXPENSE' }));
-    
-    setUpcomingItems([...activeEmis, ...activeExpected]);
-    setSelectedMonth(format(new Date(), 'yyyy-MM'));
-    
-    // Categories
-    const fetchedCategories = await getCategories(activeUser.id, 'EXPENSE');
-    setCategories(fetchedCategories);
-    
-    // Ensure "Loan Repayment" category exists for loan repayment
-    if (!fetchedCategories.some(c => c.name.toLowerCase() === 'loan repayment')) {
-      await saveCategory(activeUser.id, 'Loan Repayment', 'EXPENSE');
-      const updatedCats = await getCategories(activeUser.id, 'EXPENSE');
-      setCategories(updatedCats);
-    }
+  const showToast = (message, type = 'error') => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => setToast({ visible: false, message: '', type: 'error' }), 3000);
   };
+
+  const loadData = useCallback(async () => {
+    if (!activeUser) return;
+    const [accs, emis, expected] = await Promise.all([
+      getAccounts(activeUser.id),
+      getEmis(activeUser.id),
+      getExpectedExpenses(activeUser.id)
+    ]);
+
+    setAccounts(accs);
+    if (accs.length > 0 && !accountId) setAccountId(accs[0].id);
+
+    const activeEmis = emis.filter(e => e.paidMonths < e.tenure).map(e => ({ ...e, itemType: 'EMI' }));
+    const activeExpected = expected.filter(e => e.isDone === 0).map(e => ({ ...e, itemType: 'EXPENSE' }));
+    setUpcomingItems([...activeEmis, ...activeExpected]);
+
+    // Ensure system categories and fetch
+    await ensureSystemCategories(activeUser.id);
+    const cats = await getCategories(activeUser.id, ['EXPENSE', 'EMI Payment', 'CC Limit Blockage', 'PAYMENT']);
+    setCategories(cats);
+  }, [activeUser]);
+
+  useFocusEffect(useCallback(() => {
+    setAmount(''); setNote(''); setToAccountId(null); setCategoryId(null); setDate(new Date());
+    setTenure(''); setInterestRate(''); setServiceCharge(''); setTaxPercentage(''); setSelectedUpcomingId(null);
+    loadData();
+    if (route?.params?.type) { setType(route.params.type); setLockedType(!!route.params.locked); }
+    else { setType('EXPENSE'); setLockedType(false); }
+  }, [route?.params, loadData]));
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -105,522 +109,203 @@ export default function AddTransaction({ onClose, route }) {
   };
 
   const handleSave = async () => {
+    const err = validateTransaction(type, { amount, accountId, categoryId, toAccountId, tenure, selectedUpcomingId });
+    if (err) { showToast(err); return; }
+
     if (type === 'PAY_UPCOMING') {
       const selectedItem = upcomingItems.find(i => i.id === selectedUpcomingId);
-      if (!selectedItem || !accountId) return;
-      
-      if (selectedItem.itemType === 'EMI') {
-         await payEmi(activeUser.id, selectedUpcomingId, accountId);
-      } else {
-         await payExpectedExpense(activeUser.id, selectedUpcomingId, accountId);
-      }
-      
-      setAmount('');
-      setNote('');
-      setSelectedUpcomingId(null);
-      if (onClose) onClose();
-      else navigation.navigate('Dashboard');
-      return;
-    }
-
-    if (!amount || !accountId) return;
-    if ((type === 'TRANSFER' || type === 'PAYMENT') && !toAccountId) return;
-    if (type === 'EMI' && !tenure) return;
-
-    if (type === 'EMI') {
+      if (!selectedItem) return;
+      if (selectedItem.itemType === 'EMI') await payEmi(activeUser.id, selectedUpcomingId, accountId);
+      else await payExpectedExpense(activeUser.id, selectedUpcomingId, accountId);
+    } else if (type === 'EMI') {
       await saveEmi(activeUser.id, {
-        accountId,
-        amount: parseFloat(amount),
-        emiDate: date.getDate(),
-        tenure: parseInt(tenure, 10),
-        interestRate: parseFloat(interestRate) || 0,
-        note,
+        accountId, amount: parseFloat(amount), emiDate: date.getDate(),
+        tenure: parseInt(tenure, 10), interestRate: parseFloat(interestRate) || 0,
+        serviceCharge: parseFloat(serviceCharge) || 0, taxPercentage: parseFloat(taxPercentage) || 0, note,
       });
     } else {
-      // For repayments, we want it to be an EXPENSE in the "Loan Repayment" category
       let finalCategoryId = categoryId;
-      const isLoanRepayment = type === 'REPAY_LOAN' || type === 'PAY_BORROWED';
-      const isLendedAction = type === 'LEND_MONEY' || type === 'COLLECT_REPAYMENT';
-      
-      const isRepayment = isLoanRepayment || type === 'COLLECT_REPAYMENT';
-      
-      if (isRepayment || type === 'LEND_MONEY') {
-        const loansCat = categories.find(c => c.name.toLowerCase() === 'loan repayment');
-        if (loansCat) {
-          finalCategoryId = loansCat.id;
+      const isCC = accounts.find(acc => acc.id === accountId)?.type === 'CREDIT_CARD';
+      let finalType = type;
+
+      if (type === 'EXPENSE' && isCC) {
+        finalType = 'CC_EXPENSE';
+      }
+
+      const isSpecial = ['REPAY_LOAN', 'PAY_BORROWED', 'LEND_MONEY', 'COLLECT_REPAYMENT', 'CC_PAY'].includes(type);
+      if (isSpecial) {
+        if (type === 'CC_PAY') {
+          const ccPayCat = categories.find(c => c.name.toLowerCase() === 'cc pay');
+          if (ccPayCat) finalCategoryId = ccPayCat.id;
+        } else {
+          const loansCat = categories.find(c => c.name.toLowerCase() === 'loan repayment');
+          if (loansCat) finalCategoryId = loansCat.id;
         }
       }
 
       await saveTransaction(activeUser.id, {
-        type: (isLoanRepayment || type === 'LEND_MONEY' || type === 'COLLECT_REPAYMENT') ? 'EXPENSE' : type,
-        amount: parseFloat(amount),
-        accountId,
-        categoryId: (type === 'EXPENSE' || isLoanRepayment || isLendedAction) ? finalCategoryId : null,
-        toAccountId: (type === 'TRANSFER' || type === 'PAYMENT' || isLoanRepayment || isLendedAction) ? toAccountId : undefined,
-        note: isLoanRepayment ? `${type === 'REPAY_LOAN' ? 'Loan' : 'Borrowed'} Repayment: ${note || 'Partial Payment'}` : 
-              type === 'LEND_MONEY' ? `Lent Money: ${note || 'Initial'}` :
-              type === 'COLLECT_REPAYMENT' ? `Collected Repayment: ${note || 'Partial'}` : note,
-        date: date.toISOString(),
+        type: type === 'CC_PAY' ? 'CC_PAY' : (isSpecial ? 'EXPENSE' : finalType),
+        amount: parseFloat(amount), accountId,
+        categoryId: (type === 'EXPENSE' || finalType === 'CC_EXPENSE' || type === 'CC_PAY' || isSpecial) ? finalCategoryId : null,
+        toAccountId: (type === 'TRANSFER' || type === 'PAYMENT' || type === 'CC_PAY' || isSpecial) ? toAccountId : undefined,
+        note: (type === 'REPAY_LOAN' || type === 'PAY_BORROWED') ? `${type.replace('_', ' ')}: ${note || 'Partial'}` :
+          type === 'LEND_MONEY' ? `Lent: ${note}` : type === 'COLLECT_REPAYMENT' ? `Collected: ${note}` : note,
+        date: toUTC(date, activeUser?.timezone),
       });
     }
 
-    setAmount('');
-    setNote('');
-    setTenure('');
-    setCategoryId(null);
-    if (onClose) onClose();
-    else navigation.navigate('Dashboard');
+    if (onClose) onClose(); else navigation.navigate('Dashboard');
   };
 
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={handleSave} style={styles.headerBtn}>
-          <Check color={theme.primary} size={24} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Add Transaction</Text>
-        <TouchableOpacity onPress={() => { if (onClose) onClose(); else navigation.goBack(); }} style={styles.headerBtn}>
-          <X color={theme.textMuted} size={24} />
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <CustomHeader
+        title="Add Transaction"
+        leftComponent={<View style={{ width: 40 }} />}
+        rightComponent={
+          <TouchableOpacity onPress={() => { if (onClose) onClose(); else navigation.goBack(); }} style={styles.headerBtn}>
+            <X color={theme.textMuted} size={22} />
+          </TouchableOpacity>
+        }
+        theme={theme}
+        fs={fs}
+      />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}>
-        {/* Amount Section */}
-        <View style={[styles.amountContainer, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.amountLabel, { color: theme.textMuted }]}>
-            {type === 'EMI' ? 'PURCHASE AMOUNT' : 'AMOUNT'}
-          </Text>
-          <View style={styles.amountInputRow}>
-            <Text style={[styles.currencySymbol, { color: theme.textSubtle }]}>₹</Text>
-            <TextInput 
-              style={[styles.amountInput, { color: theme.text }]} 
-              placeholder="0.00"
-              placeholderTextColor={theme.textSubtle}
-              keyboardType="numeric"
-              autoFocus={true}
-              value={amount} 
-              onChangeText={setAmount} 
-            />
-          </View>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, marginTop: 12 }]}>
+          <Text style={[styles.cardHeader, { color: theme.textSubtle, marginBottom: 6 }]}>Transaction Type</Text>
+          <TypeSelector type={type} setType={setType} lockedType={lockedType} theme={theme} transactionTypes={TRANSACTION_TYPES} />
         </View>
 
-        {/* Type Selector (Dropdown - Concise) */}
-        <View style={styles.fieldContainer}>
-          <View style={[styles.fieldIcon, { backgroundColor: theme.primary + '22', marginTop: 4 }]}>
-            <Info color={theme.primary} size={20} />
-          </View>
-          <View style={styles.fieldContent}>
-            <CustomDropdown 
-              label="TRANSACTION TYPE"
-              selectedValue={type}
-              disabled={lockedType}
-              onSelect={(val) => {
-                if (lockedType) return;
-                setType(val);
-                if (val === 'PAY_UPCOMING') setUpcomingType('EXPENSE');
-              }}
-              options={TRANSACTION_TYPES.map(t => ({ label: t.label, value: t.value }))}
-            />
-          </View>
-        </View>
+        <AmountHero amount={amount} setAmount={setAmount} type={type} theme={theme} autoFocus={type !== 'PAY_UPCOMING'} />
 
-        {type === 'PAY_UPCOMING' ? (
-          <>
-            <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>ITEM TYPE</Text>
-              <View style={styles.chipRow}>
-                <TouchableOpacity 
-                  style={[styles.chip, { backgroundColor: upcomingType === 'EXPENSE' ? theme.primary : theme.surface, borderColor: upcomingType === 'EXPENSE' ? theme.primary : theme.border }]}
-                  onPress={() => { setUpcomingType('EXPENSE'); setSelectedUpcomingId(null); }}
-                >
-                  <Text style={{ color: upcomingType === 'EXPENSE' ? '#fff' : theme.text, fontWeight: '700', fontSize: 13 }}>EXPENSES</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.chip, { backgroundColor: upcomingType === 'INCOME' ? theme.primary : theme.surface, borderColor: upcomingType === 'INCOME' ? theme.primary : theme.border }]}
-                  onPress={() => { setUpcomingType('INCOME'); setSelectedUpcomingId(null); }}
-                >
-                  <Text style={{ color: upcomingType === 'INCOME' ? '#fff' : theme.text, fontWeight: '700', fontSize: 13 }}>INCOMES</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <UpcomingSettleFields
+          theme={theme} type={type} upcomingType={upcomingType} setUpcomingType={setUpcomingType}
+          selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth}
+          selectedUpcomingId={selectedUpcomingId} setSelectedUpcomingId={(id) => {
+            const item = upcomingItems.find(i => i.id === id);
+            setSelectedUpcomingId(id);
+            if (item) { setAmount(item.amount.toString()); setNote(item.type === 'INCOME' ? `Received ${item.name}` : `Paid ${item.name || item.note}`); }
+          }}
+          upcomingItems={upcomingItems} format={format} addMonths={addMonths}
+        />
 
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: '#3b82f622', marginTop: 4 }]}>
-                <Calendar color="#3b82f6" size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <CustomDropdown 
-                  label="Target Month"
-                  placeholder="Select Month..."
-                  selectedValue={selectedMonth}
-                  onSelect={setSelectedMonth}
-                  options={Array.from({length: 6}).map((_, i) => {
-                    const m = format(addMonths(new Date(), i), 'yyyy-MM');
-                    return { label: m, value: m };
-                  })}
-                />
-              </View>
-            </View>
+        <AccountCategoryFields
+          theme={theme} type={type} accountId={accountId} setAccountId={setAccountId}
+          accounts={
+            type === 'EXPENSE' ? accounts.filter(acc => acc.type === 'BANK' || acc.type === 'CREDIT_CARD') :
+              type === 'INCOME' ? accounts.filter(acc => acc.type === 'BANK') :
+                type === 'TRANSFER' ? accounts.filter(acc => acc.type === 'BANK' || acc.type === 'INVESTMENT') :
+                  type === 'PAYMENT' || type === 'CC_PAY' ? accounts.filter(acc => acc.type === 'BANK') :
+                    type === 'PAY_UPCOMING' ? accounts.filter(acc => {
+                      const item = upcomingItems.find(i => i.id === selectedUpcomingId);
+                      if (item?.itemType === 'EXPENSE') {
+                        if (item?.type === 'INCOME') return acc.type === 'BANK';
+                        return acc.type === 'BANK' || acc.type === 'CREDIT_CARD';
+                      }
+                      return true;
+                    }) : accounts
+          }
+          categoryId={categoryId} setCategoryId={setCategoryId} categories={categories.filter(c => c.isSystem !== 1)}
+          showAddCategory={showAddCategory} setShowAddCategory={setShowAddCategory}
+          newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} handleCreateCategory={handleCreateCategory}
+        />
 
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: theme.primary + '22', marginTop: 4 }]}>
-                <Check color={theme.primary} size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <CustomDropdown 
-                  label={upcomingType === 'INCOME' ? 'Income to Receive' : 'Item to Pay'}
-                  placeholder="Choose Item..."
-                  selectedValue={selectedUpcomingId}
-                  onSelect={(id) => {
-                     const item = upcomingItems.find(i => i.id === id);
-                     setSelectedUpcomingId(id);
-                     if (item) {
-                       setAmount(item.amount.toString());
-                       setNote(item.type === 'INCOME' ? `Received ${item.name}` : `Paid ${item.name || item.note}`);
-                     }
-                  }}
-                  options={upcomingItems
-                    .filter(item => {
-                      const isCorrectMonth = item.itemType === 'EMI' || item.monthKey === selectedMonth;
-                      const isCorrectType = upcomingType === 'INCOME' ? item.type === 'INCOME' : (item.type === 'EXPENSE' || !item.type || item.itemType === 'EMI');
-                      return isCorrectMonth && isCorrectType;
-                    })
-                    .map(item => ({ label: `${item.name || item.note} (₹${item.amount})`, value: item.id }))}
-                />
-              </View>
-            </View>
+        <TransferDetails 
+          theme={theme} type={type} accountId={accountId} toAccountId={toAccountId} setToAccountId={setToAccountId} 
+          accounts={
+            type === 'TRANSFER' ? accounts.filter(acc => acc.type === 'BANK' || acc.type === 'INVESTMENT') : 
+            type === 'PAYMENT' || type === 'CC_PAY' ? accounts.filter(acc => acc.type === 'CREDIT_CARD') :
+            accounts
+          } 
+        />
 
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: '#10b98122', marginTop: 4 }]}>
-                <Wallet color="#10b981" size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <CustomDropdown 
-                  label={upcomingType === 'INCOME' ? 'Receive INTO' : 'Pay FROM'}
-                  placeholder="Select Account..."
-                  selectedValue={accountId}
-                  onSelect={setAccountId}
-                  options={accounts
-                    .filter(a => upcomingType === 'INCOME' ? a.type === 'BANK' : (a.type === 'BANK' || a.type === 'CREDIT_CARD'))
-                    .map(a => ({ label: a.name, value: a.id, accountType: a.type }))}
-                />
-              </View>
-            </View>
-          </>
-        ) : (
-          <>
+        <EmiDetailsEntry
+          theme={theme} type={type} amount={amount} tenure={tenure} setTenure={setTenure}
+          interestRate={interestRate} setInterestRate={setInterestRate}
+          serviceCharge={serviceCharge} setServiceCharge={setServiceCharge}
+          taxPercentage={taxPercentage} setTaxPercentage={setTaxPercentage} fs={fs}
+        />
 
-            {type === 'EMI' && (
-              <View style={styles.fieldContainer}>
-                <View style={[styles.fieldIcon, { backgroundColor: '#f59e0b22', marginTop: 4 }]}>
-                  <TrendingUp color="#f59e0b" size={20} />
-                </View>
-                <View style={styles.fieldContent}>
-                  <Text style={[styles.label, { color: theme.textMuted }]}>Interest Rate (% p.a.)</Text>
-                  <TextInput 
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }]} 
-                    placeholder="0.00%" 
-                    placeholderTextColor={theme.textSubtle}
-                    keyboardType="numeric"
-                    value={interestRate} 
-                    onChangeText={setInterestRate} 
-                  />
-                  {amount && tenure && (
-                    <View style={{ marginTop: 8, padding: 10, backgroundColor: theme.primary + '11', borderRadius: 8 }}>
-                      <Text style={{ color: theme.text, fontSize: 12 }}>
-                        Monthly EMI: <Text style={{ fontWeight: 'bold', color: theme.primary }}>
-                          ₹{((parseFloat(amount) + (parseFloat(amount) * (parseFloat(interestRate) || 0) / 100 * (parseInt(tenure, 10) || 1) / 12)) / (parseInt(tenure, 10) || 1)).toFixed(2)}
-                        </Text>
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
+        <NoteDateFields theme={theme} type={type} note={note} setNote={setNote} date={date} setDate={setDate} />
 
-            {type === 'EMI' && (
-              <View style={styles.fieldContainer}>
-                <View style={[styles.fieldIcon, { backgroundColor: '#ec489922', marginTop: 4 }]}>
-                  <Clock color="#ec4899" size={20} />
-                </View>
-                <View style={styles.fieldContent}>
-                  <Text style={[styles.label, { color: theme.textMuted }]}>Tenure (Months)</Text>
-                  <TextInput 
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }]} 
-                    placeholder="e.g. 12" 
-                    placeholderTextColor={theme.textSubtle}
-                    keyboardType="numeric"
-                    value={tenure} 
-                    onChangeText={setTenure} 
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Category Section */}
-            {type === 'EXPENSE' && (
-              <View style={styles.fieldContainer}>
-                <View style={[styles.fieldIcon, { backgroundColor: '#ef444422', marginTop: 4 }]}>
-                  <Tag color="#ef4444" size={20} />
-                </View>
-                <View style={styles.fieldContent}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textMuted }}>Category</Text>
-                    <TouchableOpacity onPress={() => setShowAddCategory(!showAddCategory)}>
-                      <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 12 }}>
-                        {showAddCategory ? 'Cancel' : '+ New'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {showAddCategory ? (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TextInput 
-                        style={[styles.input, { flex: 1, backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }]} 
-                        placeholder="e.g. Shopping" 
-                        placeholderTextColor={theme.textSubtle}
-                        value={newCategoryName} 
-                        onChangeText={setNewCategoryName} 
-                      />
-                      <TouchableOpacity 
-                        style={{ backgroundColor: theme.success, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 }} 
-                        onPress={handleCreateCategory}
-                      >
-                        <Plus color="white" size={20} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <CustomDropdown 
-                      placeholder="Select Category..."
-                      selectedValue={categoryId}
-                      onSelect={setCategoryId}
-                      options={categories.map(c => ({ label: c.name, value: c.id }))}
-                    />
-                  )}
-                </View>
-              </View>
-            )}
-
-            {/* Account Section */}
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: theme.primary + '22', marginTop: 4 }]}>
-                <Wallet color={theme.primary} size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <CustomDropdown 
-                  label={type === 'REPAY_LOAN' ? 'Debit FROM' : type === 'TRANSFER' ? 'Transfer FROM' : 'Account'}
-                  placeholder="Select Account..."
-                  selectedValue={accountId}
-                  onSelect={setAccountId}
-                  options={(
-                    type === 'EMI'      ? accounts.filter(a => a.type === 'CREDIT_CARD') :
-                    type === 'INCOME'   ? accounts.filter(a => a.type === 'BANK') :
-                    type === 'TRANSFER' ? accounts.filter(a => a.type === 'BANK' || a.type === 'INVESTMENT' || a.type === 'SIP' || a.type === 'LENDED') :
-                    (type === 'REPAY_LOAN' || type === 'PAY_BORROWED' || type === 'LEND_MONEY') ? accounts.filter(a => a.type === 'BANK') :
-                    type === 'COLLECT_REPAYMENT' ? accounts.filter(a => a.type === 'LENDED') :
-                    type === 'PAYMENT'  ? accounts.filter(a => a.type === 'BANK') :
-                    type === 'EXPENSE'  ? accounts.filter(a => a.type === 'BANK' || a.type === 'CREDIT_CARD') :
-                    accounts
-                  ).map(a => ({ label: a.name, value: a.id, accountType: a.type }))}
-                />
-              </View>
-            </View>
-
-            {/* Target Account (Transfers/Repayments) */}
-            {(type === 'TRANSFER' || type === 'PAYMENT' || type === 'REPAY_LOAN' || type === 'PAY_BORROWED' || type === 'LEND_MONEY' || type === 'COLLECT_REPAYMENT') && (
-              <View style={styles.fieldContainer}>
-                <View style={[styles.fieldIcon, { backgroundColor: '#8b5cf622', marginTop: 4 }]}>
-                  <Landmark color="#8b5cf6" size={20} />
-                </View>
-                <View style={styles.fieldContent}>
-                  <CustomDropdown 
-                    label={type === 'PAYMENT' ? 'Pay TO (Credit Card)' : 
-                           type === 'REPAY_LOAN' ? 'Credit TO (Loan)' : 'Target Account'}
-                    placeholder="Select Target..."
-                    selectedValue={toAccountId}
-                    onSelect={setToAccountId}
-                    options={
-                      type === 'PAYMENT' ? accounts.filter(a => a.type === 'CREDIT_CARD').map(a => ({ label: a.name, value: a.id })) :
-                      type === 'REPAY_LOAN' ? accounts.filter(a => a.type === 'LOAN').map(a => ({ label: a.name, value: a.id })) :
-                      type === 'PAY_BORROWED' ? accounts.filter(a => a.type === 'BORROWED').map(a => ({ label: a.name, value: a.id })) :
-                      type === 'LEND_MONEY' ? accounts.filter(a => a.type === 'LENT').map(a => ({ label: a.name, value: a.id })) :
-                      type === 'COLLECT_REPAYMENT' ? accounts.filter(a => a.type === 'BANK').map(a => ({ label: a.name, value: a.id })) :
-                      accounts.filter(a => (a.type === 'BANK' || a.type === 'INVESTMENT' || a.type === 'SIP' || a.type === 'LENT') && a.id !== accountId).map(a => ({ label: a.name, value: a.id }))
-                    }
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Note Section */}
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: theme.border, marginTop: 4 }]}>
-                <Info color={theme.textMuted} size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <Text style={[styles.label, { color: theme.textMuted }]}>Note / Description</Text>
-                <TextInput 
-                  style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }]} 
-                  placeholder="e.g. Groceries" 
-                  placeholderTextColor={theme.textSubtle}
-                  value={note} 
-                  onChangeText={setNote} 
-                />
-              </View>
-            </View>
-
-            {/* Date Section */}
-            <View style={styles.fieldContainer}>
-              <View style={[styles.fieldIcon, { backgroundColor: '#3b82f622', marginTop: 4 }]}>
-                <Calendar color="#3b82f6" size={20} />
-              </View>
-              <View style={styles.fieldContent}>
-                <DatePicker label={type === 'EMI' ? 'EMI Day (Monthly)' : 'Transaction Date'} date={date} onChange={setDate} />
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* Save Button (Always last for ergonomics) */}
-        <View style={{ padding: 16, marginTop: 10, paddingBottom: 40 }}>
-          <TouchableOpacity 
-            style={[styles.submitBtn, { backgroundColor: theme.primary, shadowColor: theme.primary }]} 
+        <View style={{ padding: 25, alignItems: 'flex-end' }}>
+          <TouchableOpacity
+            style={[styles.roundSubmitBtn, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
             onPress={handleSave}
+            activeOpacity={0.8}
           >
-            <Text style={styles.submitBtnText}>
-              {type === 'PAY_UPCOMING' ? 'Settle Payment' : 'Save Transaction'}
-            </Text>
+            <Check color="white" size={28} strokeWidth={3} />
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {toast.visible && (
+        <View style={[styles.toast, { backgroundColor: toast.type === 'error' ? '#ef4444' : '#10b981' }]}>
+          <Info color="white" size={20} />
+          <Text style={styles.toastText}>{toast.message.toUpperCase()}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  headerBtn: {
-    padding: 8,
-  },
-  amountContainer: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  amountLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-  amountInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currencySymbol: {
-    fontSize: 32,
-    fontWeight: '300',
-    marginRight: 4,
-  },
-  amountInput: {
-    fontSize: 48,
-    fontWeight: '700',
-    padding: 0,
-    minWidth: 100,
-    textAlign: 'center',
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  typeSelector: {
-    paddingRight: 16,
-    gap: 10,
-  },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    gap: 8,
-  },
-  typeChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  fieldContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  fieldIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fieldContent: {
-    flex: 1,
-  },
-  input: {
+  container: { flex: 1 },
+  headerBtn: { padding: 8, borderRadius: 20 },
+  card: {
+    marginHorizontal: 16,
+    marginTop: 10,
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    fontSize: 15,
+    borderRadius: 18,
+    borderWidth: 1.2,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
+  selectionCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1.2,
+    elevation: 1,
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+  cardHeader: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    opacity: 0.7
   },
-  chip: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
+  roundSubmitBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }
   },
-  submitBtn: {
-    padding: 16,
-    borderRadius: 16,
+  toast: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    padding: 15,
+    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    justifyContent: 'center',
+    gap: 10,
+    zIndex: 10000,
+    elevation: 10
   },
-  submitBtnText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 18,
-  },
+  toastText: { color: 'white', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
 });

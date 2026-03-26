@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 
 export default function DatePicker({ date, onChange, label, mode = 'date', dateFormat, containerStyle, pickerStyle }) {
   const [show, setShow] = useState(false);
-  const { theme } = useTheme();
+  const { theme, fs } = useTheme();
 
   const handleDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || date;
@@ -26,10 +26,10 @@ export default function DatePicker({ date, onChange, label, mode = 'date', dateF
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={[styles.label, { color: theme.textMuted }]}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: theme.textMuted, fontSize: fs(12) }]}>{label}</Text>}
       <TouchableOpacity style={[styles.pickerButton, pickerStyle, { backgroundColor: theme.surface, borderColor: theme.borderDark }]} onPress={togglePicker}>
         <Calendar size={18} color={theme.textMuted} style={styles.icon} />
-        <Text style={[styles.dateText, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={[styles.dateText, { color: theme.text, fontSize: fs(14) }]} numberOfLines={1} ellipsizeMode="tail">
           {displayDate()}
         </Text>
       </TouchableOpacity>
@@ -50,29 +50,24 @@ export default function DatePicker({ date, onChange, label, mode = 'date', dateF
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   label: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4b5563',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   pickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
+    height: 48,
+    paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d1d5db',
   },
   icon: {
     marginRight: 10,
   },
   dateText: {
-    fontSize: 16,
-    color: '#1f2937',
     flex: 1,
   },
 });

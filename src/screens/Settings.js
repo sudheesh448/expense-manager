@@ -1,25 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase } from '../services/storage';
-import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft } from 'lucide-react-native';
+import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateUserTimezone, updateUserCurrency } from '../services/storage';
+import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote } from 'lucide-react-native';
+import { TIMEZONE_OPTIONS, findNearestTimezone } from '../utils/dateUtils';
+import { CURRENCY_OPTIONS } from '../utils/currencyUtils';
 import CustomDropdown from '../components/CustomDropdown';
+import CustomHeader from '../components/CustomHeader';
+import DatabaseInspector from './DatabaseInspector';
+import DeveloperTools from './DeveloperTools';
+import { ShieldCheck } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const { activeUser, updateUser, logout } = useAuth();
   const { theme, fs, themeMode, toggleTheme, fontScale, setFontScalePreference, dashboardGraphs, setDashboardGraphsPreference, customGraphs, setCustomGraphsPreference, graphOrder, setGraphOrderPreference, isSettingsOpen, setIsSettingsOpen } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [activeCategory, setActiveCategory] = useState(null); // 'APPEARANCE' | 'FINANCIAL' | 'SECURITY' | 'BACKUP'
 
   const [isBioEnabled, setIsBioEnabled] = useState(activeUser?.biometricsEnabled === 1);
+  const [developerMode, setDeveloperMode] = useState(activeUser?.developerMode === 1);
   const [forecastMonths, setForecastMonths] = useState(6);
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
+  const [selectedTimezone, setSelectedTimezone] = useState(findNearestTimezone(activeUser?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone));
+  const [selectedCurrency, setSelectedCurrency] = useState(activeUser?.currency || Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR');
   
   const [showGraphsModal, setShowGraphsModal] = useState(false);
   const [showCustomGraphsModal, setShowCustomGraphsModal] = useState(false);
@@ -30,8 +40,11 @@ export default function SettingsScreen() {
   const [editingGraphId, setEditingGraphId] = useState(null);
   
   const [showWipePinModal, setShowWipePinModal] = useState(false);
+  const [showDatabaseInspector, setShowDatabaseInspector] = useState(false);
+  const [showDeveloperTools, setShowDeveloperTools] = useState(false);
   const [wipePin, setWipePin] = useState('');
   const [wipePinError, setWipePinError] = useState('');
+  const [isNuclearWipe, setIsNuclearWipe] = useState(false);
   const isDarkMode = themeMode === 'dark';
 
   useEffect(() => {
@@ -74,7 +87,33 @@ export default function SettingsScreen() {
     setAutoBackupEnabled(val);
   };
 
+  const handleToggleDeveloperMode = async (val) => {
+    await updateDeveloperMode(activeUser.id, val);
+    setDeveloperMode(val);
+    updateUser({ ...activeUser, developerMode: val ? 1 : 0 });
+  };
+  
+  const handleUpdateTimezone = async (val) => {
+    await updateUserTimezone(activeUser.id, val);
+    setSelectedTimezone(val);
+    updateUser({ ...activeUser, timezone: val });
+  };
+
+  const handleUpdateCurrency = async (val) => {
+    await updateUserCurrency(activeUser.id, val);
+    setSelectedCurrency(val);
+    updateUser({ ...activeUser, currency: val });
+  };
+
   const handleWipe = () => {
+    setIsNuclearWipe(false);
+    setWipePin('');
+    setWipePinError('');
+    setShowWipePinModal(true);
+  };
+
+  const handleDevWipe = () => {
+    setIsNuclearWipe(true);
     setWipePin('');
     setWipePinError('');
     setShowWipePinModal(true);
@@ -87,12 +126,18 @@ export default function SettingsScreen() {
       return;
     }
     setShowWipePinModal(false);
+    
+    const title = isNuclearWipe ? 'NUCLEAR DESTRUCTION' : 'Final Confirmation';
+    const message = isNuclearWipe 
+      ? 'This will DROP ALL TABLES and recreate the database from scratch. ALL user profiles and data will be lost. Continue?'
+      : 'This will permanently erase all data. This cannot be undone.';
+      
     Alert.alert(
-      'Final Confirmation',
-      'This will permanently erase all data. This cannot be undone.',
+      title,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Erase Everything', style: 'destructive', onPress: async () => {
+        { text: isNuclearWipe ? 'DROP DATABASE' : 'Erase Everything', style: 'destructive', onPress: async () => {
             await resetDatabase();
             setIsSettingsOpen(false);
             logout();
@@ -280,6 +325,32 @@ export default function SettingsScreen() {
           ]}
         />
       </View>
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <View style={styles.row}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Globe color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Time Zone</Text>
+        </View>
+        <CustomDropdown
+          containerStyle={{ marginBottom: 0, minWidth: 160 }}
+          selectedValue={selectedTimezone}
+          onSelect={handleUpdateTimezone}
+          options={TIMEZONE_OPTIONS}
+        />
+      </View>
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <View style={styles.row}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Banknote color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Currency</Text>
+        </View>
+        <CustomDropdown
+          containerStyle={{ marginBottom: 0, minWidth: 160 }}
+          selectedValue={selectedCurrency}
+          onSelect={handleUpdateCurrency}
+          options={CURRENCY_OPTIONS}
+        />
+      </View>
     </View>
   );
 
@@ -370,6 +441,48 @@ export default function SettingsScreen() {
     </View>
   );
 
+  const renderDeveloper = () => (
+    <View style={[styles.card, { backgroundColor: theme.surface }]}>
+      <View style={styles.row}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Wrench color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Floating DB Inspector</Text>
+        </View>
+        <Switch value={developerMode} onValueChange={handleToggleDeveloperMode} />
+      </View>
+      
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+      <TouchableOpacity style={styles.row} onPress={() => setShowDatabaseInspector(true)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Database color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Database Table Inspector</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+      
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+      <TouchableOpacity style={styles.row} onPress={() => setShowDeveloperTools(true)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ShieldCheck color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Financial Engine Test Suite</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+      
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      
+      <TouchableOpacity style={styles.row} onPress={handleDevWipe}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ShieldAlert color={theme.danger} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]}>Destroy & Rebuild Database</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+    </View>
+  );
+
   const CategoryMenuItem = ({ title, icon: Icon, value }) => (
     <TouchableOpacity style={[styles.card, { backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, marginBottom: 12 }]} onPress={() => setActiveCategory(value)}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -384,32 +497,35 @@ export default function SettingsScreen() {
 
   return (
     <Modal visible={isSettingsOpen} animationType="slide" onRequestClose={() => setIsSettingsOpen(false)}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
         
         {/* Header Setup based on Active Category */}
-        <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
-          {!activeCategory ? (
-            <>
-              <Text style={[styles.headerTitle, { color: theme.text, fontSize: fs(24) }]}>Profile & Settings</Text>
+        {!activeCategory ? (
+          <CustomHeader 
+            title="Profile & Settings"
+            rightComponent={
               <TouchableOpacity onPress={() => setIsSettingsOpen(false)} style={styles.iconButton}>
                 <X color={theme.textSubtle} size={28} />
               </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.iconButton}>
-                  <ArrowLeft color={theme.text} size={28} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text, fontSize: fs(20), marginLeft: 8 }]}>
-                  {activeCategory === 'APPEARANCE' ? 'Appearance' : 
-                   activeCategory === 'FINANCIAL' ? 'Financial Planning' :
-                   activeCategory === 'SECURITY' ? 'Security' : 'Backup & Recovery'}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
+            }
+            theme={theme}
+            fs={fs}
+          />
+        ) : (
+          <CustomHeader
+            title={activeCategory === 'APPEARANCE' ? 'Appearance' : 
+                 activeCategory === 'FINANCIAL' ? 'Financial Planning' :
+                 activeCategory === 'SECURITY' ? 'Security' : 
+                 activeCategory === 'DEVELOPER' ? 'Developer Options' : 'Backup & Recovery'}
+            leftComponent={
+              <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.iconButton}>
+                <ArrowLeft color={theme.text} size={28} />
+              </TouchableOpacity>
+            }
+            theme={theme}
+            fs={fs}
+          />
+        )}
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}>
           {!activeCategory ? (
@@ -429,6 +545,7 @@ export default function SettingsScreen() {
                 <CategoryMenuItem title="Financial Planning" icon={PieChart} value="FINANCIAL" />
                 <CategoryMenuItem title="Security" icon={Fingerprint} value="SECURITY" />
                 <CategoryMenuItem title="Backup & Recovery" icon={Database} value="BACKUP" />
+                <CategoryMenuItem title="Developer Options" icon={Wrench} value="DEVELOPER" />
               </View>
 
               <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]} onPress={() => { setIsSettingsOpen(false); logout(); }}>
@@ -442,15 +559,17 @@ export default function SettingsScreen() {
               {activeCategory === 'FINANCIAL' && renderFinancial()}
               {activeCategory === 'SECURITY' && renderSecurity()}
               {activeCategory === 'BACKUP' && renderBackup()}
+              {activeCategory === 'DEVELOPER' && renderDeveloper()}
             </>
+
           )}
         </ScrollView>
       </SafeAreaView>
 
       {/* DASHBOARD GRAPHS MODAL (FLOATING) */}
       <Modal visible={showGraphsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowGraphsModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 20, paddingTop: insets.top, paddingBottom: 16 }}>
             <Text style={{ fontWeight: 'bold', color: theme.text, fontSize: fs(18) }}>Dashboard Graphs</Text>
             <TouchableOpacity onPress={() => setShowGraphsModal(false)}><X color={theme.textSubtle} size={24} /></TouchableOpacity>
           </View>
@@ -568,12 +687,25 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
+      <DatabaseInspector 
+        visible={showDatabaseInspector} 
+        onClose={() => setShowDatabaseInspector(false)}
+        theme={theme}
+        fs={fs}
+      />
+
+      <DeveloperTools
+        visible={showDeveloperTools}
+        onClose={() => setShowDeveloperTools(false)}
+        theme={theme}
+        fs={fs}
+      />
+
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1 },
   headerTitle: { fontWeight: '800' },
   iconButton: { padding: 4 },
   profileHeader: { alignItems: 'center', marginVertical: 32 },

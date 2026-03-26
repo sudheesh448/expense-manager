@@ -1,48 +1,51 @@
 import { addMonths, setDate, isAfter, isBefore, startOfMonth, format, isValid } from 'date-fns';
 
-export const generateProjections = (accounts, transactions, expectedExpenses = [], emis = [], monthsForward = 6, monthsBefore = 0) => {
+/**
+ * Generates financial projections by integrating accounts, transactions,
+ * scheduled items (expectedExpenses), and category-level budgets.
+ */
+export const generateProjections = (accounts, transactions, expectedExpenses = [], budgets = [], monthsForward = 6, monthsBefore = 0, excludeCategoryIds = []) => {
   const today = new Date();
   const timeline = [];
   const totalMonths = monthsBefore + monthsForward;
+  const todayKey = format(today, 'yyyy-MM');
+
+  // Pre-calculate exclusion set for performance
+  const excludedIds = new Set(excludeCategoryIds.map(id => String(id)));
+
+  // Pre-calculate budget category set for deduplication
+  const budgetCategoryIds = new Set();
+  budgets.forEach(b => {
+    if (b.categoryIds && Array.isArray(b.categoryIds)) {
+      b.categoryIds.forEach(id => budgetCategoryIds.add(String(id)));
+    }
+  });
 
   // Initialize timeline array
   for (let i = 0; i < totalMonths; i++) {
     const targetMonth = addMonths(startOfMonth(today), i - monthsBefore);
+    const monthKey = format(targetMonth, 'yyyy-MM');
+    
     timeline.push({
       date: targetMonth,
       label: format(targetMonth, 'MMM yyyy'),
-      monthKey: format(targetMonth, 'yyyy-MM'),
+      monthKey,
       creditCardDue: 0,
-      emiDue: 0,
-      expectedDue: 0,
+      expectedDue: budgets.reduce((sum, b) => sum + (b.amount || 0), 0), // Start with budget caps
       expectedIncome: 0,
       totalOutputs: 0,
       totalInputs: 0,
+      totalInvestments: 0,
+      actualOutputs: 0,
+      actualInputs: 0,
       ccDetails: [],
-      loanDetails: [],
       expectedDetails: [],
+      investmentDetails: [],
+      budgetDetails: budgets.map(b => ({ ...b, isBudget: true })),
     });
   }
 
-  // 1. Process EMIs
-  emis.forEach(emi => {
-    const remainingTenure = emi.tenure - emi.paidMonths;
-    if (remainingTenure <= 0) return;
-    
-    let appliedCount = 0;
-    for (let i = 0; i < timeline.length; i++) {
-        if (appliedCount >= remainingTenure) break;
-        
-        timeline[i].emiDue += emi.amount;
-        timeline[i].loanDetails.push({ 
-             name: emi.note || 'EMI', 
-             amount: emi.amount 
-        });
-        appliedCount++;
-    }
-  });
-
-  // 2. Process Credit Cards
+  // 1. Process Credit Cards
   const creditCards = accounts.filter(a => a.type === 'CREDIT_CARD' && a.billingDay && a.dueDay);
   
   creditCards.forEach(card => {
@@ -51,6 +54,9 @@ export const generateProjections = (accounts, transactions, expectedExpenses = [
     cardTxs.forEach(tx => {
       const txDate = new Date(tx.date);
       if (!isValid(txDate)) return;
+
+      // Exclude internal limit adjustments (Blockage/Recovery)
+      if (excludedIds.has(String(tx.categoryId))) return;
 
       let cycleEnd = setDate(txDate, card.billingDay);
       if (isAfter(txDate, cycleEnd)) {
@@ -85,18 +91,47 @@ export const generateProjections = (accounts, transactions, expectedExpenses = [
     });
   });
 
-  // 3. Process Expected Expenses & Incomes
+  // 2. Process Actual Transaction Totals (Past/Present)
+  transactions.forEach(tx => {
+    const txDate = new Date(tx.date);
+    if (!isValid(txDate)) return;
+    const mKey = format(txDate, 'yyyy-MM');
+    const slot = timeline.find(s => s.monthKey === mKey);
+    
+    if (slot) {
+      if (tx.type === 'INCOME') {
+        slot.actualInputs += tx.amount;
+      } else if (tx.type === 'EXPENSE' || tx.type === 'CC_PAY' || tx.type === 'EMI_PAYMENT') {
+        slot.actualOutputs += tx.amount;
+      }
+    }
+  });
+
+  // 3. Process Expected Expenses & Incomes with Budget Deduplication
   expectedExpenses.forEach(exp => {
     const slot = timeline.find(s => s.monthKey === exp.monthKey);
     if (slot) {
-      slot.expectedDetails.push(exp);
       if (exp.type === 'INCOME') {
+        slot.expectedDetails.push(exp);
         if (exp.isDone === 0) {
           slot.expectedIncome += exp.amount;
         }
-      } else {
+      } else if (exp.type === 'SIP_PAY') {
+        slot.investmentDetails.push(exp);
         if (exp.isDone === 0) {
-          slot.expectedDue += exp.amount;
+          slot.totalInvestments += exp.amount;
+        }
+      } else {
+        // Enforce Deduplication: If category is in budget, it's already counted in expectedDue
+        const isBudgeted = budgetCategoryIds.has(String(exp.categoryId));
+        if (!isBudgeted) {
+          slot.expectedDetails.push(exp);
+          if (exp.isDone === 0) {
+            slot.expectedDue += exp.amount;
+          }
+        } else {
+          // If budgeted, we still show it in details but marked as "COVERED BY BUDGET"
+          slot.expectedDetails.push({ ...exp, isCoveredByBudget: true });
         }
       }
     }
@@ -105,8 +140,18 @@ export const generateProjections = (accounts, transactions, expectedExpenses = [
   // Cleanup
   timeline.forEach(slot => {
     slot.creditCardDue = Math.max(0, slot.creditCardDue); 
-    slot.totalOutputs = slot.creditCardDue + slot.emiDue + slot.expectedDue;
+    slot.totalOutputs = slot.creditCardDue + slot.expectedDue;
     slot.totalInputs = slot.expectedIncome;
+    
+    // For past months, if we have actual data, it might be more relevant for status
+    const isPast = isBefore(slot.date, startOfMonth(today));
+    if (isPast) {
+        slot.status = 'HISTORICAL';
+    } else if (slot.monthKey === todayKey) {
+        slot.status = 'CURRENT';
+    } else {
+        slot.status = 'PROJECTION';
+    }
   });
 
   return timeline;

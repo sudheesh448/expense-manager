@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, CreditCard, CalendarDays, Settings as SettingsIcon, AlertTriangle, CalendarClock, List, User, Plus } from 'lucide-react-native';
@@ -13,20 +13,43 @@ import Projections from './src/screens/Projections';
 import UpcomingPayments from './src/screens/UpcomingPayments';
 import SettingsScreen from './src/screens/Settings';
 import Login from './src/screens/Login';
+import AccountDetail from './src/screens/AccountDetail';
+import EmiDetails from './src/screens/EmiDetails';
 import { initDatabase, generateAllRecurringExpenses, performAutoBackup } from './src/services/storage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { setupGlobalErrorHandler } from './src/utils/errorHandler';
+import FloatingDbInspectorButton from './src/components/FloatingDbInspectorButton';
 
 // Install global error handler as early as possible
 setupGlobalErrorHandler();
 
-const Tab = createBottomTabNavigator();
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+const AccountsStack = createNativeStackNavigator();
+
+function AccountsNavigator() {
+  const { theme } = useTheme();
+  return (
+    <AccountsStack.Navigator screenOptions={{ 
+      headerShown: false,
+      contentStyle: { backgroundColor: theme.background },
+      animation: 'none',
+      detachPreviousScreen: false
+    }}>
+      <AccountsStack.Screen name="AccountsList" component={Accounts} />
+      <AccountsStack.Screen name="AccountDetail" component={AccountDetail} />
+      <AccountsStack.Screen name="EmiDetails" component={EmiDetails} />
+    </AccountsStack.Navigator>
+  );
+}
 
 function MainApp() {
   const { activeUser } = useAuth();
+  const { theme } = useTheme();
   const [dbReady, setDbReady] = useState(false);
   const [errorString, setErrorString] = useState(null);
 
@@ -72,28 +95,42 @@ function MainApp() {
   }
 
   return (
-    <>
-      <NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <NavigationContainer theme={{
+        ...(theme.isDark ? DarkTheme : DefaultTheme),
+        dark: theme.isDark,
+        colors: {
+          ...(theme.isDark ? DarkTheme.colors : DefaultTheme.colors),
+          primary: theme.primary,
+          background: theme.background,
+          card: theme.surface,
+          text: theme.text,
+          border: theme.border,
+          notification: theme.primary,
+        }
+      }}>
         <AppNavigator />
       </NavigationContainer>
       <SettingsScreen />
-    </>
+      {activeUser?.developerMode === 1 && <FloatingDbInspectorButton />}
+    </View>
   );
 }
 
-function AppNavigator() {
+function TabNavigator() {
   const { theme } = useTheme();
   
   return (
       <Tab.Navigator
         screenOptions={({ route }) => ({
+          headerShown: false,
           tabBarIcon: ({ color, size }) => {
             if (route.name === 'Dashboard') return <Home color={color} size={size} />;
             if (route.name === 'Accounts') return <CreditCard color={color} size={size} />;
             if (route.name === 'Tx') return <List color={color} size={size} />;
             if (route.name === 'Forecast') return <CalendarDays color={color} size={size} />;
             if (route.name === 'Upcoming') return <CalendarClock color={color} size={size} />;
-            if (route.name === 'Settings') return <Settings color={color} size={size} />;
+            if (route.name === 'Settings') return <SettingsIcon color={color} size={size} />;
           },
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: theme.textSubtle,
@@ -102,54 +139,23 @@ function AppNavigator() {
             backgroundColor: theme.surface,
             borderTopColor: theme.border,
           },
-          headerStyle: {
-            backgroundColor: theme.surface,
-            borderBottomColor: theme.border,
-            borderBottomWidth: 1,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-          headerLeft: () => {
-            const { setIsSettingsOpen } = useTheme();
-            return (
-              <TouchableOpacity 
-                onPress={() => setIsSettingsOpen(true)} 
-                activeOpacity={0.8}
-                style={{ 
-                  marginLeft: 16, 
-                  backgroundColor: theme.primary,
-                  width: 38,
-                  height: 38,
-                  borderRadius: 19,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  shadowColor: theme.primary,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.35,
-                  shadowRadius: 8,
-                  elevation: 6,
-                  borderWidth: 1.5,
-                  borderColor: theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)',
-                }}
-              >
-                <User color="#FFF" size={20} strokeWidth={2.5} />
-              </TouchableOpacity>
-            );
-          },
           headerTintColor: theme.text,
+          sceneContainerStyle: { backgroundColor: theme.background },
+          tabBarHideOnKeyboard: true,
         })}
       >
         <Tab.Screen name="Dashboard" component={Dashboard}       options={{ tabBarLabel: 'Home', headerTitle: 'Dashboard' }} />
         <Tab.Screen name="Upcoming"  component={UpcomingPayments} options={{ tabBarLabel: 'Month', headerTitle: 'Month Overview' }} />
         <Tab.Screen name="Forecast"  component={Projections}      options={{ tabBarLabel: 'Forecast', headerTitle: 'Forecast' }} />
         <Tab.Screen name="Tx"        component={TransactionsList}  options={{ tabBarLabel: 'Txns' }} />
-        <Tab.Screen name="Accounts"  component={Accounts}         options={{ tabBarLabel: 'Accounts' }} />
+        <Tab.Screen name="Accounts"  component={AccountsNavigator} options={{ tabBarLabel: 'Accounts', headerShown: false }} />
         <Tab.Screen 
           name="Add" 
           component={AddTransaction} 
           options={{
             headerShown: false,
             tabBarLabel: 'Add',
+            tabBarShowLabel: false,
             tabBarButton: (props) => (
               <TouchableOpacity
                 {...props}
@@ -162,9 +168,9 @@ function AppNavigator() {
                 ])}
               >
                 <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
                   backgroundColor: theme.primary,
                   justifyContent: 'center',
                   alignItems: 'center',
@@ -173,14 +179,29 @@ function AppNavigator() {
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.3,
                   shadowRadius: 5,
+                  marginBottom: 10,
                 }}>
-                  <Plus color="#FFF" size={24} strokeWidth={3} />
+                  <Plus color="#FFF" size={28} strokeWidth={3} />
                 </View>
               </TouchableOpacity>
             )
           }} 
         />
       </Tab.Navigator>
+  );
+}
+
+function AppNavigator() {
+  const { theme } = useTheme();
+  return (
+    <Stack.Navigator screenOptions={{ 
+      headerShown: false,
+      contentStyle: { backgroundColor: theme.background },
+      animation: 'none',
+      detachPreviousScreen: false
+    }}>
+      <Stack.Screen name="MainTabs" component={TabNavigator} />
+    </Stack.Navigator>
   );
 }
 

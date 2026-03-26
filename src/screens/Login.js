@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
-import { getUsers, saveUser, importData, listSystemBackups } from '../services/storage';
+import { getUsers, saveUser, importData, listSystemBackups, ensureSystemCategories } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
-import { User, Fingerprint, Lock, Upload, Download, PlusCircle, Database, CalendarDays } from 'lucide-react-native';
+import { User, Fingerprint, Lock, Upload, Download, PlusCircle, Database, CalendarDays, Delete } from 'lucide-react-native';
 
 export default function Login() {
   const { login } = useAuth();
@@ -39,7 +39,17 @@ export default function Login() {
   const [newPin, setNewPin] = useState('');
 
   useEffect(() => {
-    loadUsers();
+    const initialize = async () => {
+      const data = await getUsers();
+      setUsers(data);
+      if (data.length > 0) {
+        setSelectedUser(data[0]);
+        if (data[0].biometricsEnabled) {
+          handleBiometrics(data[0]);
+        }
+      }
+    };
+    initialize();
   }, []);
 
   const loadUsers = async () => {
@@ -63,6 +73,7 @@ export default function Login() {
       });
       
       if (result.success) {
+        await ensureSystemCategories(user.id);
         login(user);
       }
     } catch (e) {
@@ -77,12 +88,13 @@ export default function Login() {
     handleBiometrics(user);
   };
 
-  const handleNumpad = (num) => {
+  const handleNumpad = async (num) => {
     if (pin.length < 4) {
       const newPin = pin + num;
       setPin(newPin);
       if (newPin.length === 4) {
         if (newPin === selectedUser.pin) {
+          await ensureSystemCategories(selectedUser.id);
           login(selectedUser);
         } else {
           setError('Incorrect PIN');
@@ -95,12 +107,19 @@ export default function Login() {
     }
   };
 
+  const handleBackspace = () => {
+    if (pin.length > 0) {
+      setPin(pin.slice(0, -1));
+    }
+  };
+
   const handleRegister = async () => {
     if (!newUsername || newPin.length < 4) {
       setError('Please provide a name and a 4-digit PIN');
       return;
     }
     const newUser = await saveUser(newUsername, newPin);
+    await ensureSystemCategories(newUser.id);
     login(newUser);
   };
 
@@ -243,7 +262,12 @@ export default function Login() {
               <Text style={[styles.numText, { color: colors.text }]}>{num}</Text>
             </TouchableOpacity>
           ))}
-          <View style={styles.numKey} /> 
+          <TouchableOpacity 
+            style={[styles.numKey, { backgroundColor: colors.numKey }]} 
+            onPress={handleBackspace}
+          >
+            <Delete color={colors.textSubtle} size={28} />
+          </TouchableOpacity> 
           <TouchableOpacity style={[styles.numKey, { backgroundColor: colors.numKey }]} onPress={() => handleNumpad('0')}>
             <Text style={[styles.numText, { color: colors.text }]}>0</Text>
           </TouchableOpacity>
