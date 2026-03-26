@@ -32,6 +32,7 @@ import ConvertToEmiModal from '../components/accounts/ConvertToEmiModal';
 import PausePickerModal from '../components/accounts/PausePickerModal';
 import AddFineModal from '../components/accounts/AddFineModal';
 import ForecloseEmiModal from '../components/accounts/ForecloseEmiModal';
+import LoanForecloseModal from '../components/loans/LoanForecloseModal';
 import AddBudgetModal from '../components/accounts/AddBudgetModal';
 import BudgetCard from '../components/accounts/cards/BudgetCard';
 import { AccountCard, RecurringCard } from '../components/accounts/AccountCards';
@@ -75,6 +76,7 @@ export default function AccountDetail() {
   const [showPausePicker, setShowPausePicker] = useState(false);
   const [showAddFineModal, setShowAddFineModal] = useState(false);
   const [showForecloseModal, setShowForecloseModal] = useState(false);
+  const [showLoanForecloseModal, setShowLoanForecloseModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
   // State for focused items
@@ -302,12 +304,17 @@ export default function AccountDetail() {
             ) : (
               <AccountCard
                 key={item.id} item={item} theme={theme} fs={fs} color={config.color}
+                accounts={accounts}
                 onEdit={openEditForm} onDelete={() => handleDeleteAccount(item)}
                 onRefresh={loadData}
                 onPauseMonth={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
                 onForeclose={(i) => { 
                   setSelectedItem(i); 
-                  setShowForecloseModal(true); 
+                  if (['LOAN', 'BORROWED', 'LENDED'].includes(i.type)) {
+                    setShowLoanForecloseModal(true);
+                  } else {
+                    setShowForecloseModal(true); 
+                  }
                 }}
                 onRepay={(i) => { 
                   setSelectedItem(i); 
@@ -315,7 +322,10 @@ export default function AccountDetail() {
                 }}
                 onConvert={(i) => { setSelectedItem(i); setShowConvertModal(true); }}
                 onRevert={handleRevertFromEmi}
-                onCalendar={(i) => navigation.navigate('EmiDetails', { accountId: i.id })}
+                onCalendar={(i) => {
+                  const target = ['LOAN', 'BORROWED', 'LENDED'].includes(i.type) ? 'LoanDetails' : 'EmiDetails';
+                  navigation.navigate(target, { accountId: i.id });
+                }}
                 onAddFine={(i) => { setSelectedItem(i); setShowAddFineModal(true); }}
                 onPauseRecurring={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
                 onStopRecurring={handleStopRecurring} onRestartRecurring={handleRestartRecurring}
@@ -394,6 +404,12 @@ export default function AccountDetail() {
         visible={showForecloseModal} item={selectedItem} accounts={accounts}
         activeUser={activeUser} 
         onClose={() => setShowForecloseModal(false)} onSuccess={loadData}
+      />
+
+      <LoanForecloseModal
+        visible={showLoanForecloseModal} item={selectedItem} accounts={accounts}
+        activeUser={activeUser}
+        onClose={() => setShowLoanForecloseModal(false)} onSuccess={loadData}
       />
 
       <AddBudgetModal

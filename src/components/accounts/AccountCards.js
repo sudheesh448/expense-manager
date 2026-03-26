@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import EmiAccountCard from './cards/EmiAccountCard';
+import LoanAccountCard from './cards/LoanAccountCard';
 import CreditCardCard from './cards/CreditCardCard';
 import BaseAccountCard from './cards/BaseAccountCard';
 import { getLoanStats } from '../../utils/accountUtils';
@@ -14,10 +15,11 @@ export const AccountCard = (props) => {
   
   switch (item.type) {
     case 'EMI':
+      return <EmiAccountCard {...props} />;
     case 'LOAN':
     case 'BORROWED':
     case 'LENDED':
-      return <EmiAccountCard {...props} />;
+      return <LoanAccountCard {...props} />;
     case 'CREDIT_CARD':
       return <CreditCardCard {...props} />;
     case 'SIP':

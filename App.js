@@ -15,6 +15,7 @@ import SettingsScreen from './src/screens/Settings';
 import Login from './src/screens/Login';
 import AccountDetail from './src/screens/AccountDetail';
 import EmiDetails from './src/screens/EmiDetails';
+import LoanDetails from './src/screens/LoanDetails';
 import { initDatabase, generateAllRecurringExpenses, performAutoBackup } from './src/services/storage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -43,6 +44,7 @@ function AccountsNavigator() {
       <AccountsStack.Screen name="AccountsList" component={Accounts} />
       <AccountsStack.Screen name="AccountDetail" component={AccountDetail} />
       <AccountsStack.Screen name="EmiDetails" component={EmiDetails} />
+      <AccountsStack.Screen name="LoanDetails" component={LoanDetails} />
     </AccountsStack.Navigator>
   );
 }

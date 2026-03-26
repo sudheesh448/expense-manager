@@ -90,7 +90,7 @@ export const initDatabase = async () => {
         userId TEXT NOT NULL,
         type TEXT NOT NULL, -- LOAN, BORROWED, DEBT_REPAY
         name TEXT NOT NULL,
-        balance REAL NOT NULL DEFAULT 0,
+        disbursedPrincipal REAL NOT NULL DEFAULT 0,
         principal REAL NOT NULL DEFAULT 0,
         interestRate REAL NOT NULL DEFAULT 0,
         tenure INTEGER NOT NULL DEFAULT 0,
@@ -99,6 +99,7 @@ export const initDatabase = async () => {
         serviceCharge REAL DEFAULT 0,
         taxPercentage REAL DEFAULT 0,
         loanFinePaid REAL DEFAULT 0,
+        paidMonths INTEGER DEFAULT 0,
         isClosed INTEGER DEFAULT 0,
         closureAmount REAL,
         isDeleted INTEGER DEFAULT 0,
@@ -303,6 +304,7 @@ export const initDatabase = async () => {
       await addColumn('loans', 'emiStartDate', 'TEXT');
       await addColumn('loans', 'emiAmount', 'REAL');
       await addColumn('loans', 'processingFee', 'REAL', 0);
+      await addColumn('loans', 'paidMonths', 'INTEGER', 0);
       await addColumn('loans', 'installmentStatus', 'TEXT', "'{}'");
       await addColumn('transactions', 'linkedItemId', 'TEXT');
       await addColumn('transactions', 'isDeleted', 'INTEGER', 0);
@@ -319,6 +321,7 @@ export const initDatabase = async () => {
       const runMigration = async (sql) => {
         try { await database.execAsync(sql); } catch (e) { }
       };
+      await runMigration('ALTER TABLE loans RENAME COLUMN balance TO disbursedPrincipal;');
       await runMigration("ALTER TABLE users ADD COLUMN lastBackupTimestamp TEXT DEFAULT NULL;");
       await runMigration("UPDATE transactions SET createdAt = date WHERE createdAt IS NULL;");
       await runMigration(`ALTER TABLE users ADD COLUMN dashboardGraphs TEXT DEFAULT '{"monthlyTrends":true,"totalSavings":true,"ccUtilization":true,"totalCcOutstanding":true,"nonEmiCcOutstanding":true,"monthlyExpenseSplit":true,"totalLiabilities":true}';`);
@@ -394,14 +397,16 @@ export const getAccounts = async (arg1, arg2) => {
     )
     SELECT a.*, 
            COALESCE(ba.name, cc.name, l.name, i.name, e.name, s.name) as name,
-           COALESCE(ba.balance, cc.currentUsage, l.balance, i.balance, e.balance, s.balance, s.amount) as balance,
+           COALESCE(ba.balance, cc.currentUsage, l.principal, i.balance, e.balance, s.balance, s.amount) as balance,
            cc.creditLimit,
            ba.ifsc, ba.accountNumber, ba.customerId,
            cc.cardNumber, cc.cvv, cc.expiry, cc.remainingLimit,
            l.principal as loanPrincipal, l.interestRate as loanInterestRate, l.tenure as loanTenure,
            l.startDate as loanStartDate, l.finePercentage as loanFinePercentage,
+           l.loanType, l.emiStartDate as loanEmiStartDate, l.emiAmount as loanEmiAmount,
            l.serviceCharge as loanServiceCharge, l.taxPercentage as loanTaxPercentage,
             COALESCE(ba.isClosed, cc.isClosed, l.isClosed, i.isClosed, e.isClosed, s.isClosed) as isClosed,
+            l.disbursedPrincipal as actualDisbursedPrincipal,
             l.closureAmount as loanClosureAmount,
             (COALESCE(l.loanFinePaid, 0) + COALESCE(e.loanFinePaid, 0)) as loanFinePaid,
             COALESCE(s.amount, i.sipAmount) as sipAmount, 
@@ -481,7 +486,7 @@ export const softDeleteAccount = async (arg1, arg2) => {
       )
       SELECT a.*, 
              COALESCE(ba.name, cc.name, l.name, i.name, e.name) as name,
-             COALESCE(ba.balance, cc.currentUsage, l.balance, i.balance, e.balance) as balance,
+             COALESCE(ba.balance, cc.currentUsage, l.disbursedPrincipal, i.balance, e.balance) as balance,
              e.linkedAccountId
       FROM all_accounts a 
       LEFT JOIN bank_accounts ba ON a.id = ba.id

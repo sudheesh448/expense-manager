@@ -328,7 +328,7 @@ export const payExpectedExpense = async (userId, expenseId, fromAccountId, categ
         UNION ALL
         SELECT 'CREDIT_CARD' as type, currentUsage as balance, id, NULL as loanInterestRate, NULL as loanStartDate, NULL as loanTenure, 0 as isEmi FROM credit_cards WHERE (id = ? OR name = ?) AND (isDeleted = 0 OR isDeleted IS NULL)
         UNION ALL
-        SELECT type, balance, id, interestRate as loanInterestRate, startDate as loanStartDate, tenure as loanTenure, 1 as isEmi FROM loans WHERE (id = ? OR name = ?) AND (isDeleted = 0 OR isDeleted IS NULL)
+        SELECT type, principal as balance, id, interestRate as loanInterestRate, startDate as loanStartDate, tenure as loanTenure, 1 as isEmi FROM loans WHERE (id = ? OR name = ?) AND (isDeleted = 0 OR isDeleted IS NULL)
         UNION ALL
         SELECT type, balance, id, NULL as loanInterestRate, NULL as loanStartDate, NULL as loanTenure, 0 as isEmi FROM investments WHERE (id = ? OR name = ?) AND (isDeleted = 0 OR isDeleted IS NULL)
         UNION ALL
@@ -365,7 +365,7 @@ export const payExpectedExpense = async (userId, expenseId, fromAccountId, categ
 
         if (linkedAccountId) {
           const loanSql = `
-            SELECT id, type, balance, interestRate as loanInterestRate, startDate as loanStartDate, tenure as loanTenure, 
+            SELECT id, type, principal as balance, interestRate as loanInterestRate, startDate as loanStartDate, tenure as loanTenure, 
             (SELECT 1 FROM emis WHERE id = ?) as isEmi 
             FROM loans WHERE id = ?
             UNION ALL
@@ -445,7 +445,7 @@ const reverseTransactionBalance = async (database, tx) => {
     UNION ALL
     SELECT 'CREDIT_CARD' as type, currentUsage as balance, id FROM credit_cards WHERE id = ?
     UNION ALL
-    SELECT type, balance, id FROM loans WHERE id = ?
+    SELECT type, principal as balance, id FROM loans WHERE id = ?
     UNION ALL
     SELECT type, balance, id FROM investments WHERE id = ?
     UNION ALL
@@ -471,7 +471,7 @@ const reverseTransactionBalance = async (database, tx) => {
     switch (fromAcc.type) {
       case 'BANK': await database.runAsync('UPDATE bank_accounts SET balance = ? WHERE id = ?', [bal, tx.accountId]); break;
       case 'CREDIT_CARD': await database.runAsync('UPDATE credit_cards SET currentUsage = ? WHERE id = ?', [bal, tx.accountId]); break;
-      case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET balance = ? WHERE id = ?', [bal, tx.accountId]); break;
+      case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET principal = ? WHERE id = ?', [bal, tx.accountId]); break;
       case 'INVESTMENT': case 'SIP': await database.runAsync('UPDATE investments SET balance = ? WHERE id = ?', [bal, tx.accountId]); break;
       case 'EMI': await database.runAsync('UPDATE emis SET balance = ? WHERE id = ?', [bal, tx.accountId]); break;
     }
@@ -495,7 +495,7 @@ const reverseTransactionBalance = async (database, tx) => {
       switch (toAcc.type) {
         case 'BANK': await database.runAsync('UPDATE bank_accounts SET balance = ? WHERE id = ?', [bal, tx.toAccountId]); break;
         case 'CREDIT_CARD': await database.runAsync('UPDATE credit_cards SET currentUsage = ? WHERE id = ?', [bal, tx.toAccountId]); break;
-        case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET balance = ? WHERE id = ?', [bal, tx.toAccountId]); break;
+        case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET principal = ? WHERE id = ?', [bal, tx.toAccountId]); break;
         case 'INVESTMENT': case 'SIP': await database.runAsync('UPDATE investments SET balance = ? WHERE id = ?', [bal, tx.toAccountId]); break;
         case 'EMI': await database.runAsync('UPDATE emis SET balance = ? WHERE id = ?', [bal, tx.toAccountId]); break;
       }
@@ -528,7 +528,7 @@ export const updateTransaction = async (userId, oldTx, newData, currencySymbol =
         UNION ALL
         SELECT 'CREDIT_CARD' as type, currentUsage as balance, id FROM credit_cards WHERE id = ?
         UNION ALL
-        SELECT type, balance, id FROM loans WHERE id = ?
+        SELECT type, principal as balance, id FROM loans WHERE id = ?
         UNION ALL
         SELECT type, balance, id FROM investments WHERE id = ?
         UNION ALL
@@ -549,7 +549,7 @@ export const updateTransaction = async (userId, oldTx, newData, currencySymbol =
         switch (acc.type) {
           case 'BANK': await database.runAsync('UPDATE bank_accounts SET balance = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
           case 'CREDIT_CARD': await database.runAsync('UPDATE credit_cards SET currentUsage = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
-          case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET balance = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
+          case 'LOAN': case 'BORROWED': case 'LENDED': await database.runAsync('UPDATE loans SET principal = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
           case 'INVESTMENT': case 'SIP': await database.runAsync('UPDATE investments SET balance = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
           case 'EMI': await database.runAsync('UPDATE emis SET balance = ? WHERE id = ?', [newBalance, oldTx.accountId]); break;
         }

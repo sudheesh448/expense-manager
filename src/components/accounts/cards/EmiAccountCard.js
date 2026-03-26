@@ -1,17 +1,16 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { Info, CalendarClock, Calendar as CalendarIcon, CheckCircle, CreditCard, Percent, Wallet, Edit2, Trash2 } from 'lucide-react-native';
+import { Calendar as CalendarIcon, CheckCircle, Edit2, Trash2 } from 'lucide-react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
+import { getLoanStats } from '../../../utils/accountUtils';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
 import { formatInTZ } from '../../../utils/dateUtils';
 import { calculateAmortizationSchedule } from '../../../utils/emiUtils';
-import { getLoanStats } from '../../../utils/accountUtils';
 
 const EmiAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, onAddEmi, onEdit, onDelete, color }) => {
   const loan = getLoanStats(item);
   const schedule = calculateAmortizationSchedule(item);
   const scheduleLength = schedule.length;
-  
+
   const { activeUser } = useAuth();
   const now = new Date().toISOString();
   const currentMonthKey = formatInTZ(now, activeUser?.timezone, 'yyyy-MM');
@@ -22,7 +21,7 @@ const EmiAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, o
   const currencySymbol = getCurrencySymbol(activeUser?.currency);
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.card, { backgroundColor: theme.surface }]}
       onPress={() => onDetails?.(item)}
     >
@@ -75,14 +74,14 @@ const EmiAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, o
                 else if (row.monthKey === currentMonthKey) bgColor = theme.primary;
 
                 return (
-                  <View 
-                    key={i} 
-                    style={{ 
-                      flex: 1, 
-                      backgroundColor: bgColor, 
+                  <View
+                    key={i}
+                    style={{
+                      flex: 1,
+                      backgroundColor: bgColor,
                       borderRadius: 4,
                       height: '100%'
-                    }} 
+                    }}
                   />
                 );
               })}
@@ -133,20 +132,20 @@ const EmiAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, o
             <CalendarIcon size={14} color={theme.primary} />
             <Text style={[styles.actionText, { color: theme.primary, fontSize: fs(10) }]}>Schedule</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => item.isClosed === 1 ? null : onForeclose?.(item)} 
+          <TouchableOpacity
+            onPress={() => item.isClosed === 1 ? null : onForeclose?.(item)}
             style={[styles.actionBtn, item.isClosed === 1 && { opacity: 0.5 }]}
             disabled={item.isClosed === 1}
           >
             <CheckCircle size={14} color={item.isClosed === 1 ? theme.textMuted : theme.success} />
             <Text style={[styles.actionText, { color: item.isClosed === 1 ? theme.textMuted : theme.success, fontSize: fs(10) }]}>Foreclose</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => item.isClosed === 1 ? null : onEdit?.(item)} 
-            style={[styles.actionBtn, item.isClosed === 1 && { opacity: 0.5 }]}
-            disabled={item.isClosed === 1}
+          <TouchableOpacity
+            onPress={() => (item.isClosed === 1 || completedCount > 0) ? null : onEdit?.(item)}
+            style={[styles.actionBtn, (item.isClosed === 1 || completedCount > 0) && { opacity: 0.3 }]}
+            disabled={item.isClosed === 1 || completedCount > 0}
           >
-            <Edit2 size={14} color={item.isClosed === 1 ? theme.textMuted : theme.textSubtle} />
+            <Edit2 size={14} color={(item.isClosed === 1 || completedCount > 0) ? theme.textMuted : theme.textSubtle} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onDelete?.(item)} style={styles.actionBtn}>
             <Trash2 size={14} color={theme.danger} />

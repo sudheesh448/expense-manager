@@ -34,7 +34,7 @@ export const getLoanStats = (item) => {
   }
 
   const loanType = item.loanType || (item.type === 'EMI' ? 'EMI' : 'ONE_TIME');
-  const principal_original = parseFloat(item.productPrice || item.loanPrincipal || item.principal || 0);
+  const principal_original = parseFloat(item.actualDisbursedPrincipal || item.disbursedPrincipal || item.productPrice || item.loanPrincipal || 0);
   const P_current = parseFloat(item.ccRemaining || item.balance || 0);
   const tenureValue = parseInt(item.loanTenure || item.tenure || item.emiTenureVal || 0, 10);
   
