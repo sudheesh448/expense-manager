@@ -3,20 +3,19 @@ import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } fro
 import { X, IndianRupee, Tag, Clock, CheckCircle2 } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { generateId, getDb, saveLoanInfo, updateLoanInfo } from '../../../services/storage';
+import { generateId, getDb, saveLendedInfo, updateLendedInfo } from '../../../services/storage';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
 import CustomDropdown from '../../CustomDropdown';
 import DatePicker from '../../DatePicker';
 import { FormSection, styles } from './ModalShared';
 
-export default function AddEditLoanModal({
+export default function AddEditLendedModal({
   visible, editingId, accountData, openSection, accounts, activeUser, onClose, onSuccess
 }) {
   const { theme, fs } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [acName, setAcName] = useState('');
-  const [acBalance, setAcBalance] = useState('');
   const [acLoanPrincipal, setAcLoanPrincipal] = useState('');
   const [acInterestRate, setAcInterestRate] = useState('');
   const [acTenure, setAcTenure] = useState('');
@@ -41,7 +40,6 @@ export default function AddEditLoanModal({
       setAcTargetBankId('');
     } else if (visible && !editingId) {
       setAcName('');
-      setAcBalance('');
       setAcLoanPrincipal('');
       setAcInterestRate('');
       setAcTenure('');
@@ -68,10 +66,9 @@ export default function AddEditLoanModal({
       return;
     }
 
-    const type = openSection?.key || 'LOAN';
     const data = {
       name: acName.trim(),
-      type,
+      type: 'LENDED',
       disbursedPrincipal: editingId && accountData ? (accountData.disbursedPrincipal || accountData.actualDisbursedPrincipal || parseFloat(acLoanPrincipal) || 0) : (parseFloat(acLoanPrincipal) || 0),
       interestRate: parseFloat(acInterestRate) || 0,
       tenure: parseInt(acTenure, 10) || 0,
@@ -84,20 +81,16 @@ export default function AddEditLoanModal({
       emiStartDate: acLoanType === 'EMI' ? acEmiStartDate.toISOString() : null,
       loanServiceCharge: parseFloat(acServiceCharge) || 0,
       loanTaxPercentage: parseFloat(acTaxPercentage) || 0,
-      loanFinePercentage: 0,
-      loanProcessingFee: parseFloat(acServiceCharge) || 0,
       bankAccountId: !editingId ? acTargetBankId : (accountData?.linkedAccountId || accountData?.bankAccountId || null),
       userId: activeUser.id,
-      status: 'ACTIVE',
       principal: editingId && accountData ? accountData.principal : (parseFloat(acLoanPrincipal) || 0),
       paidMonths: accountData?.paidMonths || 0
     };
 
-    const db = await getDb();
     if (editingId) {
-      await updateLoanInfo(activeUser.id, editingId, data);
+      await updateLendedInfo(activeUser.id, editingId, data);
     } else {
-      await saveLoanInfo(activeUser.id, data);
+      await saveLendedInfo(activeUser.id, data);
     }
 
     onSuccess();
@@ -126,8 +119,8 @@ export default function AddEditLoanModal({
 
     const totalInterest = acLoanType === 'EMI' ? ((emi * n) - P) : (P * (R / 100) * (n / 12));
     const totalTax = totalInterest * (parseFloat(acTaxPercentage) / 100);
-    const totalCost = P + totalInterest + totalTax + feeWithTax;
-    const creditedAmount = P - SC;
+    const totalReceipt = P + totalInterest + totalTax;
+    const deductionFromBank = P + SC;
 
     const currencySymbol = getCurrencySymbol(activeUser?.currency);
 
@@ -136,7 +129,7 @@ export default function AddEditLoanModal({
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <CheckCircle2 size={18} color={theme.primary} style={{ marginRight: 8 }} />
           <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800', letterSpacing: 0.5 }}>
-            {acLoanType === 'EMI' ? 'EMI LOAN PROJECTION' : 'ONE-TIME LOAN PROJECTION'}
+            {acLoanType === 'EMI' ? 'LENDED EMI PROJECTION' : 'ONE-TIME LENDED PROJECTION'}
           </Text>
         </View>
 
@@ -147,33 +140,33 @@ export default function AddEditLoanModal({
 
         {SC > 0 && (
           <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Processing Fee</Text>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Processing Fee Paid</Text>
             <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '700' }}>{currencySymbol}{SC.toLocaleString()}</Text>
           </View>
         )}
 
         <View style={[styles.summaryRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: theme.border + '50', borderStyle: 'dashed' }]}>
-          <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '800' }}>Net Credited Amount</Text>
-          <Text style={{ color: theme.primary, fontSize: fs(13), fontWeight: '800' }}>{currencySymbol}{creditedAmount.toLocaleString()}</Text>
+          <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '800' }}>Total Deducted from Bank</Text>
+          <Text style={{ color: theme.error || '#ef4444', fontSize: fs(13), fontWeight: '800' }}>{currencySymbol}{deductionFromBank.toLocaleString()}</Text>
         </View>
 
         <View style={[styles.summaryDivider, { backgroundColor: theme.primary + '20' }]} />
 
         {acLoanType === 'EMI' ? (
           <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Monthly Installment</Text>
-            <Text style={{ color: theme.primary, fontSize: fs(14), fontWeight: '800' }}>{currencySymbol}{emi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Monthly Receipt</Text>
+            <Text style={{ color: theme.success || '#22c55e', fontSize: fs(14), fontWeight: '800' }}>{currencySymbol}{emi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
           </View>
         ) : (
           <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Total Interest ({R}%)</Text>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Total Interest Expected ({R}%)</Text>
             <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '700' }}>{currencySymbol}{totalInterest.toLocaleString()}</Text>
           </View>
         )}
 
         <View style={styles.summaryRow}>
-          <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>Total Payable</Text>
-          <Text style={{ color: theme.primary, fontSize: fs(16), fontWeight: '900' }}>{currencySymbol}{totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+          <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>Total Receipts</Text>
+          <Text style={{ color: theme.success || '#22c55e', fontSize: fs(16), fontWeight: '900' }}>{currencySymbol}{totalReceipt.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
         </View>
 
         {parseFloat(acTaxPercentage) > 0 && (
@@ -193,7 +186,7 @@ export default function AddEditLoanModal({
             <X size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.modalTitle, { color: theme.text, fontSize: fs(18) }]}>
-            {editingId ? `Edit ${openSection?.label || 'Loan'}` : `Add ${openSection?.label || 'Loan'}`}
+            {editingId ? 'Edit Lended Account' : 'Add Lended Account'}
           </Text>
           <View style={{ width: 40 }} />
         </View>
@@ -202,16 +195,16 @@ export default function AddEditLoanModal({
           <View style={{ gap: 20 }}>
             <FormSection title="Account Setup" icon={Tag} theme={theme} fs={fs}>
               <View style={{ marginBottom: 16 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Lender/Description</Text>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Borrower/Description</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                  placeholder="e.g. Personal Loan" placeholderTextColor={theme.placeholder}
+                  placeholder="e.g. Loan to Friend" placeholderTextColor={theme.placeholder}
                   value={acName} onChangeText={setAcName}
                 />
               </View>
 
               <View style={{ marginBottom: 16 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Loan Type</Text>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Receipt Type</Text>
                 <View style={{ flexDirection: 'row', backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border, padding: 4 }}>
                   <TouchableOpacity 
                     style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 }, acLoanType === 'EMI' && { backgroundColor: theme.primary }]}
@@ -223,7 +216,7 @@ export default function AddEditLoanModal({
                     style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 }, acLoanType === 'ONE_TIME' && { backgroundColor: theme.primary }]}
                     onPress={() => setAcLoanType('ONE_TIME')}
                   >
-                    <Text style={[{ fontSize: fs(13), fontWeight: '700' }, acLoanType === 'ONE_TIME' ? { color: 'white' } : { color: theme.textSubtle }]}>One-time Payable</Text>
+                    <Text style={[{ fontSize: fs(13), fontWeight: '700' }, acLoanType === 'ONE_TIME' ? { color: 'white' } : { color: theme.textSubtle }]}>One-time Receipt</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -250,7 +243,7 @@ export default function AddEditLoanModal({
               </View>
 
               <View style={{ marginTop: 12 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Processing Fee</Text>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Processing Fee Paid</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
                   placeholder="0" placeholderTextColor={theme.placeholder}
@@ -269,7 +262,7 @@ export default function AddEditLoanModal({
 
               {!editingId && (
                 <View style={{ marginTop: 12 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Disburse To Bank Account</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Deduct From Bank Account</Text>
                   <CustomDropdown
                     options={(accounts || []).filter(a => a.type === 'BANK').map(a => ({ label: a.name, value: a.id }))}
                     selectedValue={acTargetBankId}
@@ -296,7 +289,7 @@ export default function AddEditLoanModal({
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
                 <View style={{ flex: 1 }}>
                   <DatePicker
-                    label="Disbursement Date"
+                    label="Lent Date"
                     date={acDisbursementDate}
                     onChange={setAcDisbursementDate}
                   />
@@ -304,7 +297,7 @@ export default function AddEditLoanModal({
                 {acLoanType === 'EMI' && (
                   <View style={{ flex: 1 }}>
                     <DatePicker
-                      label="First EMI Date"
+                      label="First Receipt Date"
                       date={acEmiStartDate}
                       onChange={setAcEmiStartDate}
                     />
@@ -320,7 +313,7 @@ export default function AddEditLoanModal({
               onPress={handleSave}
             >
               <Text style={[styles.saveBtnText, { fontSize: fs(16) }]}>
-                {editingId ? 'Update Loan' : 'Add Loan'}
+                {editingId ? 'Update Lended' : 'Add Lended'}
               </Text>
             </TouchableOpacity>
           </View>

@@ -108,6 +108,66 @@ export const initDatabase = async () => {
         FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
       );`);
 
+      await database.execAsync(`CREATE TABLE IF NOT EXISTS borrowed (
+        id TEXT PRIMARY KEY NOT NULL,
+        userId TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'BORROWED',
+        name TEXT NOT NULL,
+        disbursedPrincipal REAL NOT NULL DEFAULT 0,
+        principal REAL NOT NULL DEFAULT 0,
+        interestRate REAL NOT NULL DEFAULT 0,
+        tenure INTEGER NOT NULL DEFAULT 0,
+        startDate TEXT NOT NULL,
+        finePercentage REAL DEFAULT 0,
+        serviceCharge REAL DEFAULT 0,
+        taxPercentage REAL DEFAULT 0,
+        loanFinePaid REAL DEFAULT 0,
+        paidMonths INTEGER DEFAULT 0,
+        isClosed INTEGER DEFAULT 0,
+        closureAmount REAL,
+        isDeleted INTEGER DEFAULT 0,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        categoryId TEXT,
+        linkedAccountId TEXT,
+        loanType TEXT DEFAULT 'ONE_TIME',
+        disbursementDate TEXT,
+        emiStartDate TEXT,
+        emiAmount REAL,
+        processingFee REAL DEFAULT 0,
+        installmentStatus TEXT DEFAULT '{}',
+        FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+      );`);
+
+      await database.execAsync(`CREATE TABLE IF NOT EXISTS lended (
+        id TEXT PRIMARY KEY NOT NULL,
+        userId TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'LENDED',
+        name TEXT NOT NULL,
+        disbursedPrincipal REAL NOT NULL DEFAULT 0,
+        principal REAL NOT NULL DEFAULT 0,
+        interestRate REAL NOT NULL DEFAULT 0,
+        tenure INTEGER NOT NULL DEFAULT 0,
+        startDate TEXT NOT NULL,
+        finePercentage REAL DEFAULT 0,
+        serviceCharge REAL DEFAULT 0,
+        taxPercentage REAL DEFAULT 0,
+        loanFinePaid REAL DEFAULT 0,
+        paidMonths INTEGER DEFAULT 0,
+        isClosed INTEGER DEFAULT 0,
+        closureAmount REAL,
+        isDeleted INTEGER DEFAULT 0,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        categoryId TEXT,
+        linkedAccountId TEXT,
+        loanType TEXT DEFAULT 'ONE_TIME',
+        disbursementDate TEXT,
+        emiStartDate TEXT,
+        emiAmount REAL,
+        processingFee REAL DEFAULT 0,
+        installmentStatus TEXT DEFAULT '{}',
+        FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+      );`);
+
       await database.execAsync(`CREATE TABLE IF NOT EXISTS investments (
         id TEXT PRIMARY KEY NOT NULL,
         userId TEXT NOT NULL,
@@ -190,7 +250,7 @@ export const initDatabase = async () => {
       `);
 
       // 11. Migrations for decentralized schema (safe ALTER TABLEs)
-      const tables = ['bank_accounts', 'credit_cards', 'loans', 'investments', 'emis', 'sip_accounts'];
+      const tables = ['bank_accounts', 'credit_cards', 'loans', 'investments', 'emis', 'sip_accounts', 'borrowed', 'lended'];
       for (const table of tables) {
         try { await database.execAsync(`ALTER TABLE ${table} ADD COLUMN userId TEXT;`); } catch (e) { }
         try { await database.execAsync(`ALTER TABLE ${table} ADD COLUMN type TEXT;`); } catch (e) { }
@@ -209,6 +269,7 @@ export const initDatabase = async () => {
       await database.runAsync("UPDATE credit_cards SET type = 'CREDIT_CARD' WHERE type IS NULL;");
       await database.runAsync("UPDATE emis SET type = 'EMI' WHERE type IS NULL;");
       await database.runAsync("UPDATE loans SET type = 'LOAN' WHERE type IS NULL;");
+      
       await database.runAsync("UPDATE investments SET type = 'INVESTMENT' WHERE type IS NULL;");
       // Since Loans/Investments can have multiple types, we only set if null and they have unique characteristics (or rely on existing 'type' column if it was there)
       // Actually, specialized 'type' was already part of those tables mostly.
@@ -280,6 +341,7 @@ export const initDatabase = async () => {
       await addColumn('expected_expenses', 'linkedAccountId', 'TEXT');
       await addColumn('emis', 'categoryId', 'TEXT');
       await addColumn('loans', 'categoryId', 'TEXT');
+      await addColumn('loans', 'linkedAccountId', 'TEXT');
       await addColumn('bank_accounts', 'categoryId', 'TEXT');
       await addColumn('credit_cards', 'categoryId', 'TEXT');
       await addColumn('emis', 'isClosed', 'INTEGER', 0);
@@ -306,12 +368,48 @@ export const initDatabase = async () => {
       await addColumn('loans', 'processingFee', 'REAL', 0);
       await addColumn('loans', 'paidMonths', 'INTEGER', 0);
       await addColumn('loans', 'installmentStatus', 'TEXT', "'{}'");
+      await addColumn('loans', 'prepayments', 'TEXT', "'[]'");
+      await addColumn('loans', 'interestRate', 'REAL', 0);
+      await addColumn('loans', 'tenure', 'INTEGER', 0);
+      await addColumn('loans', 'startDate', 'TEXT');
+      await addColumn('loans', 'disbursedPrincipal', 'REAL', 0);
+      await addColumn('loans', 'principal', 'REAL', 0);
+
+      // Borrowed & Lended migrations
+      for(const t of ['borrowed', 'lended']) {
+        await addColumn(t, 'categoryId', 'TEXT');
+        await addColumn(t, 'linkedAccountId', 'TEXT');
+        await addColumn(t, 'loanFinePaid', 'REAL', 0);
+        await addColumn(t, 'loanType', 'TEXT', "'ONE_TIME'");
+        await addColumn(t, 'disbursementDate', 'TEXT');
+        await addColumn(t, 'emiStartDate', 'TEXT');
+        await addColumn(t, 'emiAmount', 'REAL');
+        await addColumn(t, 'processingFee', 'REAL', 0);
+        await addColumn(t, 'paidMonths', 'INTEGER', 0);
+        await addColumn(t, 'installmentStatus', 'TEXT', "'{}'");
+        await addColumn(t, 'taxPercentage', 'REAL', 0);
+        await addColumn(t, 'prepayments', 'TEXT', "'[]'");
+      }
+
+      // Data Migration: Move borrowed/lended from loans to their own tables
+      // This happens AFTER all addColumn calls for 'loans' to ensure ${debtCols} exist in 'loans'
+      try {
+        const debtCols = `id, userId, type, name, disbursedPrincipal, principal, interestRate, tenure, startDate, finePercentage, serviceCharge, taxPercentage, loanFinePaid, paidMonths, isClosed, closureAmount, isDeleted, createdAt, categoryId, linkedAccountId, loanType, disbursementDate, emiStartDate, emiAmount, processingFee, installmentStatus, prepayments`;
+        await database.execAsync(`INSERT OR IGNORE INTO borrowed (${debtCols}) SELECT ${debtCols} FROM loans WHERE type = 'BORROWED';`);
+        await database.execAsync(`DELETE FROM loans WHERE type = 'BORROWED';`);
+        await database.execAsync(`INSERT OR IGNORE INTO lended (${debtCols}) SELECT ${debtCols} FROM loans WHERE type = 'LENDED';`);
+        await database.execAsync(`DELETE FROM loans WHERE type = 'LENDED';`);
+      } catch (e) {
+        console.error('Data migration for borrowed/lended failed:', e);
+      }
+
       await addColumn('transactions', 'linkedItemId', 'TEXT');
       await addColumn('transactions', 'isDeleted', 'INTEGER', 0);
       await addColumn('transactions', 'createdAt', 'TEXT');
       await addColumn('expected_expenses', 'isDeleted', 'INTEGER', 0);
       await addColumn('categories', 'isDeleted', 'INTEGER', 0);
       await addColumn('recurring_payments', 'isDeleted', 'INTEGER', 0);
+      await addColumn('users', 'sandboxEnabled', 'INTEGER', 0);
       await addColumn('transactions', 'monthKey', 'TEXT');
       await addColumn('users', 'timezone', 'TEXT', `'${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}'`);
       await addColumn('users', 'currency', 'TEXT', `'${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}'`);
@@ -384,43 +482,54 @@ export const getAccounts = async (arg1, arg2) => {
   if (!userId) return [];
   const sql = `
     WITH all_accounts AS (
-      SELECT id, userId, type, isDeleted, createdAt FROM bank_accounts
+      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM bank_accounts
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt FROM credit_cards
+      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM credit_cards
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt FROM loans
+      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM loans
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt FROM investments
+      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM investments
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt FROM emis
+      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM emis
       UNION ALL
-      SELECT id, userId, 'SIP' as type, isDeleted, createdAt FROM sip_accounts
+      SELECT id, userId, 'SIP' as type, isDeleted, createdAt, NULL as prepayments FROM sip_accounts
+      UNION ALL
+      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM borrowed
+      UNION ALL
+      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM lended
     )
     SELECT a.*, 
-           COALESCE(ba.name, cc.name, l.name, i.name, e.name, s.name) as name,
-           COALESCE(ba.balance, cc.currentUsage, l.principal, i.balance, e.balance, s.balance, s.amount) as balance,
+           COALESCE(ba.name, cc.name, l.name, i.name, e.name, s.name, b.name, ln.name) as name,
+           COALESCE(ba.balance, cc.currentUsage, l.principal, i.balance, e.balance, s.balance, s.amount, b.principal, ln.principal) as balance,
            cc.creditLimit,
            ba.ifsc, ba.accountNumber, ba.customerId,
            cc.cardNumber, cc.cvv, cc.expiry, cc.remainingLimit,
-           l.principal as loanPrincipal, l.interestRate as loanInterestRate, l.tenure as loanTenure,
-           l.startDate as loanStartDate, l.finePercentage as loanFinePercentage,
-           l.loanType, l.emiStartDate as loanEmiStartDate, l.emiAmount as loanEmiAmount,
-           l.serviceCharge as loanServiceCharge, l.taxPercentage as loanTaxPercentage,
-            COALESCE(ba.isClosed, cc.isClosed, l.isClosed, i.isClosed, e.isClosed, s.isClosed) as isClosed,
-            l.disbursedPrincipal as actualDisbursedPrincipal,
-            l.closureAmount as loanClosureAmount,
-            (COALESCE(l.loanFinePaid, 0) + COALESCE(e.loanFinePaid, 0)) as loanFinePaid,
+           COALESCE(l.principal, b.principal, ln.principal) as loanPrincipal, 
+           COALESCE(l.interestRate, b.interestRate, ln.interestRate) as loanInterestRate, 
+           COALESCE(l.tenure, b.tenure, ln.tenure) as loanTenure,
+           COALESCE(l.loanType, b.loanType, ln.loanType) as loanType, 
+           COALESCE(l.startDate, b.startDate, ln.startDate) as loanStartDate, 
+           COALESCE(l.finePercentage, b.finePercentage, ln.finePercentage) as loanFinePercentage,
+           COALESCE(l.serviceCharge, b.serviceCharge, ln.serviceCharge) as loanServiceCharge, 
+           COALESCE(l.taxPercentage, b.taxPercentage, ln.taxPercentage) as loanTaxPercentage,
+           COALESCE(ba.isClosed, cc.isClosed, l.isClosed, i.isClosed, e.isClosed, s.isClosed, b.isClosed, ln.isClosed) as isClosed,
+           COALESCE(l.disbursedPrincipal, b.disbursedPrincipal, ln.disbursedPrincipal) as actualDisbursedPrincipal,
+            COALESCE(l.closureAmount, b.closureAmount, ln.closureAmount) as loanClosureAmount,
+            (COALESCE(l.loanFinePaid, 0) + COALESCE(e.loanFinePaid, 0) + COALESCE(b.loanFinePaid, 0) + COALESCE(ln.loanFinePaid, 0)) as loanFinePaid,
             COALESCE(s.amount, i.sipAmount) as sipAmount, 
             i.lastUpdate as investmentLastUpdate,
             e.amount as emiAmountVal, e.emiDate as emiDateVal, e.tenure as emiTenureVal, e.paidMonths as emiPaidMonthsVal,
-            e.ccUsage, e.productPrice, e.processingFee, e.ccRemaining, e.emiStartDate, 
-            COALESCE(e.installmentStatus, l.installmentStatus) as installmentStatus,
+            e.ccUsage, e.productPrice, e.processingFee, e.ccRemaining, 
+            COALESCE(e.emiStartDate, l.emiStartDate, b.emiStartDate, ln.emiStartDate) as emiStartDate, 
+            COALESCE(e.amount, l.emiAmount, b.emiAmount, ln.emiAmount) as emiAmount,
+            COALESCE(e.installmentStatus, l.installmentStatus, b.installmentStatus, ln.installmentStatus) as installmentStatus,
             e.tenure as tenure, e.amount as amount,
             e.closureAmount as emiClosureAmount,
             e.linkedAccountId as linkedAccountId, e.linkedAccountId as sourceCcId,
             COALESCE(cc.billingDay, s.sipDate, (SELECT d.emiDate FROM emis d WHERE d.id = a.id)) as billingDay,
             cc.dueDay,
-            COALESCE(s.categoryId, i.categoryId, e.categoryId, l.categoryId) as categoryId,
+            COALESCE(s.categoryId, i.categoryId, e.categoryId, l.categoryId, b.categoryId, ln.categoryId) as categoryId,
+            COALESCE(l.prepayments, b.prepayments, ln.prepayments) as prepayments,
             COALESCE(s.status, 'ACTIVE') as status,
             COALESCE(s.pausedMonths, '[]') as pausedMonths,
             (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t WHERE (t.toAccountId = a.id OR t.linkedItemId = a.id) AND (t.type IN ('TRANSFER', 'PAYMENT', 'REPAY_LOAN', 'REPAY_BORROWED', 'EMI_PAYMENT', 'EMI_FINE', 'FINE', 'EXPENSE'))) as totalPaid,
@@ -435,6 +544,8 @@ export const getAccounts = async (arg1, arg2) => {
     LEFT JOIN investments i ON a.id = i.id
     LEFT JOIN emis e ON a.id = e.id
     LEFT JOIN sip_accounts s ON a.id = s.id
+    LEFT JOIN borrowed b ON a.id = b.id
+    LEFT JOIN lended ln ON a.id = ln.id
     WHERE a.userId = ? AND (a.isDeleted IS NULL OR a.isDeleted = 0)
     ORDER BY a.createdAt DESC
   `;
@@ -485,6 +596,10 @@ export const softDeleteAccount = async (arg1, arg2) => {
         SELECT id, userId, type, isDeleted FROM emis
         UNION ALL
         SELECT id, userId, type, isDeleted FROM sip_accounts
+        UNION ALL
+        SELECT id, userId, type, isDeleted FROM borrowed
+        UNION ALL
+        SELECT id, userId, type, isDeleted FROM lended
       )
       SELECT a.*, 
              COALESCE(ba.name, cc.name, l.name, i.name, e.name) as name,
@@ -529,7 +644,7 @@ export const softDeleteAccount = async (arg1, arg2) => {
       await deleteRecurringByAccountId(database, accountId);
       await database.runAsync('UPDATE expected_expenses SET isDeleted = 1 WHERE linkedAccountId = ?', [accountId]);
 
-      const tables = ['bank_accounts', 'credit_cards', 'loans', 'investments', 'emis', 'sip_accounts'];
+      const tables = ['bank_accounts', 'credit_cards', 'loans', 'investments', 'emis', 'sip_accounts', 'borrowed', 'lended'];
       for (const table of tables) {
         await database.runAsync(`UPDATE ${table} SET isDeleted = 1 WHERE id = ?`, [accountId]);
       }
@@ -575,14 +690,19 @@ export const recordAccountFine = async (arg1, arg2, arg3, arg4, arg5, arg6, arg7
     const accountSql = `
       SELECT id, 'LOAN' as type FROM loans WHERE id = ?
       UNION ALL
+      SELECT id, 'BORROWED' as type FROM borrowed WHERE id = ?
+      UNION ALL
+      SELECT id, 'LENDED' as type FROM lended WHERE id = ?
+      UNION ALL
       SELECT id, 'EMI' as type FROM emis WHERE id = ?
     `;
-    const account = await database.getFirstAsync(accountSql, [accountId, accountId]);
+    const account = await database.getFirstAsync(accountSql, [accountId, accountId, accountId, accountId]);
     console.log('Recording fine for account:', account);
 
     if (account) {
       if (['LOAN', 'BORROWED', 'LENDED', 'DEBT_REPAY'].includes(account.type)) {
-        await database.runAsync('UPDATE loans SET loanFinePaid = COALESCE(loanFinePaid, 0) + ? WHERE id = ?', [amount, accountId]);
+        const table = account.type === 'LOAN' ? 'loans' : (account.type === 'BORROWED' ? 'borrowed' : (account.type === 'LENDED' ? 'lended' : 'loans'));
+        await database.runAsync(`UPDATE ${table} SET loanFinePaid = COALESCE(loanFinePaid, 0) + ? WHERE id = ?`, [amount, accountId]);
       } else if (account.type === 'EMI') {
         const updateSql = 'UPDATE emis SET loanFinePaid = COALESCE(loanFinePaid, 0) + ? WHERE id = ?';
         await database.runAsync(updateSql, [amount, accountId]);
@@ -618,10 +738,14 @@ export const getAllAccountsForLookup = async (userId) => {
     SELECT id, name, type FROM investments WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL)
     UNION ALL
     SELECT id, name, type FROM emis WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+    UNION ALL
+    SELECT id, name, type FROM borrowed WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL)
+    UNION ALL
+    SELECT id, name, type FROM lended WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL)
     ORDER BY name ASC
   `;
   try {
-    return await database.getAllAsync(sql, [userId, userId, userId, userId, userId]);
+    return await database.getAllAsync(sql, [userId, userId, userId, userId, userId, userId, userId]);
   } catch (error) {
     console.error('Error fetching accounts for lookup', error);
     return [];

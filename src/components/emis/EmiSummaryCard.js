@@ -169,6 +169,44 @@ const EmiSummaryCard = ({ account, totals, schedule = [], scheduleLength, theme,
 
             </TouchableOpacity>
 
+            {/* Repayment Progress */}
+            <View style={{ marginTop: expanded ? 20 : 10, paddingHorizontal: 12, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={[styles.statLabel, { color: theme.textSubtle, fontSize: fs(10), fontWeight: '800' }]}>REPAYMENT PROGRESS</Text>
+                    <Text style={{ color: account.isClosed === 1 ? theme.success : theme.primary, fontWeight: '900', fontSize: fs(expanded ? 12 : 14) }}>
+                        {account.isClosed === 1 ? '100%' : `${progressPercent}%`}
+                    </Text>
+                </View>
+                <View style={{ flexDirection: 'row', height: expanded ? 8 : 16, gap: 2 }}>
+                    {regularSchedule.map((row, i) => {
+                        let bgColor = theme.border + '33';
+                        const now = new Date();
+                        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                        
+                        if (row.isCompleted) bgColor = theme.success;
+                        else if (row.isForeclosed) bgColor = theme.textSubtle + '66';
+                        else if (row.monthKey < currentMonthKey) bgColor = theme.danger;
+                        else if (row.monthKey === currentMonthKey) bgColor = theme.primary;
+
+                        return (
+                            <View key={i} style={{ flex: 1, backgroundColor: bgColor, borderRadius: 4, height: '100%' }} />
+                        );
+                    })}
+                </View>
+                {!expanded && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                        <Text style={{ color: theme.textSubtle, fontSize: fs(11), fontWeight: '700' }}>{account.isClosed === 1 ? (paidCount === scheduleLength ? 'Fully Repaid' : 'Settled Early') : `${paidCount}/${scheduleLength} Payments Made`}</Text>
+                        <Text style={{ color: theme.primary, fontSize: fs(10), fontWeight: '800' }}>Tap for details</Text>
+                    </View>
+                )}
+                {expanded && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                        <Text style={{ color: theme.textSubtle, fontSize: fs(9), fontWeight: '700' }}>{paidCount} PAID</Text>
+                        <Text style={{ color: theme.textSubtle, fontSize: fs(9), fontWeight: '700' }}>{account.isClosed === 1 ? `${scheduleLength - paidCount} SETTLED` : `${scheduleLength - paidCount} REMAINING`}</Text>
+                    </View>
+                )}
+            </View>
+
             <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: theme.text, fontSize: fs(15) }]}>Repayment Timeline</Text>
                 <Text style={[styles.sectionSubtitle, { color: theme.textSubtle, fontSize: fs(11) }]}>{scheduleLength} Installments</Text>

@@ -153,7 +153,7 @@ export default function Accounts() {
         text: 'Revert', onPress: async () => {
           const db = await getDb();
           await Promise.all([
-            updateLoanInfo(db, item.id, { ...item, isEmi: 0, loanTenure: (item.loanTenure || 0) / 12 }),
+            updateLoanInfo(activeUser.id, item.id, { ...item, isEmi: 0, loanTenure: (item.loanTenure || 0) / 12 }),
             deleteRecurringByAccountId(item.id)
           ]);
           loadData();

@@ -13,7 +13,7 @@ export const calculateAmortizationSchedule = (account) => {
     if (!principal || !tenure) return [];
     
     const rows = [];
-    const startDate = new Date(account.loanStartDate || account.emiStartDate || new Date().toISOString());
+    const startDate = new Date(account.emiStartDate || account.loanStartDate || account.startDate || new Date().toISOString());
 
     if (loanType === 'EMI') {
         const P = principal;
@@ -21,6 +21,7 @@ export const calculateAmortizationSchedule = (account) => {
         
         let emi = parseFloat(account.loanEmi || account.emiAmount || account.amount || account.emiAmountVal || 0);
         const annualRate = parseFloat(account.loanInterestRate || account.interestRate || 0);
+        const taxRate = parseFloat(account.loanTaxPercentage || account.taxPercentage || 0);
         const r = annualRate / 1200;
 
         if (emi <= 0) {
@@ -31,22 +32,43 @@ export const calculateAmortizationSchedule = (account) => {
             }
         }
 
+        const prepayments = typeof account.prepayments === 'string' ? JSON.parse(account.prepayments || '[]') : (account.prepayments || []);
         const statusMap = typeof account.installmentStatus === 'string' ? JSON.parse(account.installmentStatus || '{}') : (account.installmentStatus || {});
         let currentBalance = P;
         
         for (let i = 1; i <= n; i++) {
-            let interest = currentBalance * r;
-            let pr = emi - interest;
-            
-            if (i === n) {
-                pr = currentBalance;
-                interest = Math.max(0, emi - pr);
-            }
-
+            // Apply prepayments that occurred during or before this installment period
+            // To simplify, we'll check for prepayments whose date falls within this month's cycle
             const monthDate = new Date(startDate);
             monthDate.setMonth(startDate.getMonth() + i - 1);
-            
             const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+            
+            // Find prepayments for this month key (or earlier if not already applied)
+            // But actually, we just need to know if the balance has already been reduced.
+            // In the storage, we subtract prepayment from 'principal' immediately.
+            // But the schedule is built from the ORIGINAL principal.
+            // So we must subtract prepayments from P as we go.
+            
+            const monthPrepayments = prepayments.filter(p => {
+                const pDate = new Date(p.date);
+                const pKey = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
+                return pKey === monthKey;
+            }).reduce((sum, p) => sum + p.amount, 0);
+
+            let interest = Math.max(0, currentBalance * r);
+            let pr = emi - interest;
+            
+            if (currentBalance <= 0) break; // Loan already settled early
+
+            if (i === n || (currentBalance - pr) < 1) {
+                pr = currentBalance;
+                interest = Math.max(0, emi - pr);
+                if (interest > currentBalance * r) interest = currentBalance * r; // Cap interest
+            }
+            
+            const tax = interest * (taxRate / 100);
+            const totalOutflow = emi + tax;
+
             const status = statusMap[monthKey] || (i <= (account.paidMonths || 0) ? 'paid' : (account.isClosed === 1 ? 'foreclosed' : 'unpaid'));
             const isPaid = status === 'paid';
             const isForeclosed = status === 'foreclosed';
@@ -58,21 +80,57 @@ export const calculateAmortizationSchedule = (account) => {
                 date: monthDate.toLocaleString('default', { month: 'short', year: 'numeric' }),
                 emi,
                 interest: interest,
-                tax: 0,
+                tax: tax,
                 principal: pr,
                 balance: Math.max(0, currentBalance - pr),
-                totalOutflow: emi,
+                totalOutflow: totalOutflow,
                 isCompleted: isPaid,
-                isForeclosed: isForeclosed
+                isForeclosed: isForeclosed,
+                prepayment: monthPrepayments
             });
 
-            currentBalance -= pr;
+            // Adjust balance for NEXT month: subtract principal component AND any prepayments made this month
+            currentBalance -= (pr + monthPrepayments);
+            
+            if (currentBalance < 0.01) break; // Terminate early if principal is gone
         }
     } else if (loanType === 'ONE_TIME') {
+        const prepayments = typeof account.prepayments === 'string' ? JSON.parse(account.prepayments || '[]') : (account.prepayments || []);
         const P = principal;
         const n = tenure; 
         const annualRate = parseFloat(account.loanInterestRate || account.interestRate || 0);
-        const totalInterest = P * (annualRate / 100) * (n / 12);
+        const taxRate = parseFloat(account.loanTaxPercentage || account.taxPercentage || 0);
+        
+        let totalInterest = 0;
+        let currentBalance = P;
+        const start = new Date(startDate);
+        const end = new Date(startDate);
+        end.setMonth(start.getMonth() + n);
+
+        // Calculate interest based on reducing balance due to prepayments
+        // We split the tenure into months and check balance each month
+        for (let i = 1; i <= n; i++) {
+            const mStart = new Date(start);
+            mStart.setMonth(start.getMonth() + i - 1);
+            const mEnd = new Date(start);
+            mEnd.setMonth(start.getMonth() + i);
+            const monthKey = `${mStart.getFullYear()}-${String(mStart.getMonth() + 1).padStart(2, '0')}`;
+
+            const monthPrepayments = prepayments.filter(p => {
+                const pDate = new Date(p.date);
+                const pKey = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
+                return pKey === monthKey;
+            }).reduce((sum, p) => sum + p.amount, 0);
+
+            // Interest for this month: balance * (rate/100) * (1/12)
+            const monthInterest = currentBalance * (annualRate / 100) * (1 / 12);
+            totalInterest += Math.max(0, monthInterest);
+            currentBalance -= monthPrepayments;
+            if (currentBalance < 0.01) break;
+        }
+
+        const totalTax = totalInterest * (taxRate / 100);
+        const finalP = Math.max(0, currentBalance);
         
         const monthDate = new Date(startDate);
         monthDate.setMonth(startDate.getMonth() + n);
@@ -83,12 +141,12 @@ export const calculateAmortizationSchedule = (account) => {
             monthDate: new Date(monthDate),
             monthKey,
             date: monthDate.toLocaleString('default', { month: 'short', year: 'numeric' }),
-            emi: P + totalInterest,
+            emi: finalP + totalInterest + totalTax,
             interest: totalInterest,
-            tax: 0,
-            principal: P,
+            tax: totalTax,
+            principal: finalP,
             balance: 0,
-            totalOutflow: P + totalInterest,
+            totalOutflow: finalP + totalInterest + totalTax,
             isCompleted: account.isClosed === 1,
             isForeclosed: false
         });

@@ -10,12 +10,12 @@ import { generateProjections } from '../../utils/projections';
 import { getCurrencySymbol } from '../../utils/currencyUtils';
 
 export default function SavingsOverviewCard({ userId, theme, fs, currency }) {
-  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [data, setData] = useState({ actual: 0, predicted: 0 });
 
   const loadData = async () => {
     if (!userId) return;
-    setLoading(true);
+    setIsFetching(true);
     try {
       const database = await getDb();
       // Ensure all recurring and SIP expenses are topped up for the forecast horizon
@@ -49,7 +49,7 @@ export default function SavingsOverviewCard({ userId, theme, fs, currency }) {
     } catch (error) {
       console.error('Error calculating savings overview:', error);
     } finally {
-      setLoading(false);
+      setIsFetching(false);
     }
   };
 
@@ -59,13 +59,6 @@ export default function SavingsOverviewCard({ userId, theme, fs, currency }) {
     }, [userId])
   );
 
-  if (loading) {
-    return (
-      <View style={[styles.card, { backgroundColor: theme.surface, height: 160, justifyContent: 'center' }]}>
-        <ActivityIndicator color={theme.primary} />
-      </View>
-    );
-  }
 
   const isActualPositive = data.actual >= 0;
   const isPredictedPositive = data.predicted >= 0;
@@ -73,10 +66,12 @@ export default function SavingsOverviewCard({ userId, theme, fs, currency }) {
   return (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.header}>
-        <View style={[styles.titleIcon, { backgroundColor: theme.primary + '15' }]}>
-            <Zap size={18} color={theme.primary} strokeWidth={2.5} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <View style={[styles.titleIcon, { backgroundColor: theme.primary + '15' }]}>
+                <Zap size={18} color={theme.primary} strokeWidth={2.5} />
+            </View>
+            <Text style={[styles.title, { color: theme.text, fontSize: fs(15) }]}>Savings Overview</Text>
         </View>
-        <Text style={[styles.title, { color: theme.text, fontSize: fs(15) }]}>Savings Overview</Text>
       </View>
 
       <View style={styles.statsContainer}>

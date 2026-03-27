@@ -54,13 +54,14 @@ const DonutChart = ({ data, total, theme, fs, currency }) => {
   );
 };
 
-export default function MonthlyInsights({ userId, monthKey, label, dateObj, theme, fs, currency, onPressSelector }) {
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState({ income: 0, outflow: 0, consumption: 0, ccBilled: 0, ccUnbilled: 0, ccLimit: 0 });
+export default function MonthlyInsights({ userId, monthKey, label, dateObj, isActive, theme, fs, currency, onPressSelector, refreshKey }) {
+  const [isFetching, setIsFetching] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [summary, setSummary] = useState({ income: 0, outflow: 0, consumption: 0, ccBilled: 0, ccUnbilled: 0, ccLimit: 0, sip: 0 });
   const [consumption, setConsumption] = useState({ direct: 0, cc: 0, emi: 0 });
 
   const loadData = async (isMounted) => {
-    setLoading(true);
+    setIsFetching(true);
     try {
       const db = await getDb();
       const accounts = await getAccounts(db, userId);
@@ -102,26 +103,28 @@ export default function MonthlyInsights({ userId, monthKey, label, dateObj, them
           ccLimit: aggCCLimit
         });
         setConsumption({ direct: expActual, cc: ccExpActual, emi: emiActual });
-        setLoading(false);
+        setIsFetching(false);
       }
     } catch (e) {
       console.error('Error loading MonthlyInsights data:', e);
-      if (isMounted) setLoading(false);
+      if (isMounted) setIsFetching(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
+    if (isActive && (!hasLoaded || (refreshKey > 0))) {
       loadData(isMounted);
-      return () => { isMounted = false; };
-    }, [userId, monthKey])
-  );
+      setHasLoaded(true);
+    }
+    return () => { isMounted = false; };
+  }, [isActive, userId, monthKey, refreshKey]);
 
-  if (loading) {
+  if (!isActive && !hasLoaded) {
     return (
       <View style={[styles.mainCard, { backgroundColor: theme.surface, height: 280, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color={theme.primary} />
+        <ActivityIndicator color={theme.primary} opacity={0.3} />
+        <Text style={{ color: theme.textSubtle, fontSize: fs(10), marginTop: 12 }}>{label}</Text>
       </View>
     );
   }
@@ -219,7 +222,7 @@ export default function MonthlyInsights({ userId, monthKey, label, dateObj, them
 }
 
 const styles = StyleSheet.create({
-  mainCard: { borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, marginHorizontal: 2 },
+  mainCard: { borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, marginHorizontal: 2, height: 280 },
   header: { marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { flexDirection: 'row', alignItems: 'center' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 12 },

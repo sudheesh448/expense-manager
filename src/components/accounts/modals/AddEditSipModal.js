@@ -18,7 +18,7 @@ export default function AddEditSipModal({
   const [billingDay, setBillingDay] = useState('1');
 
   useEffect(() => {
-    if (visible && editingId && accountData) {
+    if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
       setAcBalance((accountData.balance || 0).toString());
       setAcSipAmount((accountData.sipAmount || '').toString());

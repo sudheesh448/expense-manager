@@ -54,7 +54,7 @@ export const saveEmi = async (userId, emiData) => {
 
     const emiAccountId = id;
     const ccUsageVal = Number(emiData.ccUsage || P);
-    const start = new Date(emiData.loanStartDate || new Date().toISOString());
+    const start = new Date(emiData.emiStartDate || emiData.loanStartDate || new Date().toISOString());
     const emiStartDate = start.toISOString();
 
     // Initialize installment status dictionary

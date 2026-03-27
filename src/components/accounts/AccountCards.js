@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import EmiAccountCard from './cards/EmiAccountCard';
 import LoanAccountCard from './cards/LoanAccountCard';
+import BorrowedAccountCard from './cards/BorrowedAccountCard';
 import CreditCardCard from './cards/CreditCardCard';
 import BaseAccountCard from './cards/BaseAccountCard';
 // Removed unused import
@@ -17,7 +18,9 @@ export const AccountCard = (props) => {
     case 'EMI':
       return <EmiAccountCard {...props} />;
     case 'LOAN':
+      return <LoanAccountCard {...props} />;
     case 'BORROWED':
+      return <BorrowedAccountCard {...props} />;
     case 'LENDED':
       return <LoanAccountCard {...props} />;
     case 'CREDIT_CARD':

@@ -94,3 +94,8 @@ export const updateUserCurrency = async (userId, currency) => {
   const database = await getDb();
   await database.runAsync('UPDATE users SET currency = ? WHERE id = ?', [currency, userId || '']);
 };
+
+export const updateSandboxEnabled = async (userId, enabled) => {
+  const database = await getDb();
+  await database.runAsync('UPDATE users SET sandboxEnabled = ? WHERE id = ?', [enabled ? 1 : 0, userId || '']);
+};

@@ -20,19 +20,19 @@ export default function AddEditEmiModal({
   const [acSourceCcId, setAcSourceCcId] = useState('');
   const [acTenure, setAcTenure] = useState('');
   const [billingDay, setBillingDay] = useState('1');
-  const [acLoanStartDate, setAcLoanStartDate] = useState(new Date());
+  const [acEmiStartDate, setAcEmiStartDate] = useState(new Date());
   const [acServiceCharge, setAcServiceCharge] = useState('');
   const [acEmiAmount, setAcEmiAmount] = useState('');
 
   useEffect(() => {
-    if (visible && editingId && accountData) {
+    if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
       setAcProductPrice((accountData.productPrice || accountData.amount || '').toString());
       setAcBalance((accountData.balance || 0).toString());
       setAcSourceCcId(accountData.linkedAccountId || '');
       setAcTenure((accountData.tenure || '').toString());
       setBillingDay((accountData.emiDate || 1).toString());
-      setAcLoanStartDate(accountData.emiStartDate ? new Date(accountData.emiStartDate) : new Date());
+      setAcEmiStartDate(accountData.emiStartDate ? new Date(accountData.emiStartDate) : (accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date()));
       setAcServiceCharge((accountData.processingFee || '').toString());
       setAcEmiAmount((accountData.amount || accountData.emiAmount || '').toString());
     } else if (visible && !editingId) {
@@ -42,7 +42,7 @@ export default function AddEditEmiModal({
       setAcSourceCcId('');
       setAcTenure('');
       setBillingDay('1');
-      setAcLoanStartDate(new Date());
+      setAcEmiStartDate(new Date());
       setAcServiceCharge('');
       setAcEmiAmount('');
     }
@@ -70,7 +70,8 @@ export default function AddEditEmiModal({
       linkedAccountId: acSourceCcId,
       tenure: parseInt(acTenure, 10) || 1,
       emiDate: parseInt(billingDay, 10) || 1,
-      loanStartDate: acLoanStartDate.toISOString(),
+      loanStartDate: acEmiStartDate.toISOString(),
+      emiStartDate: acEmiStartDate.toISOString(),
       serviceCharge: parseFloat(acServiceCharge) || 0,
       taxPercentage: 0, // Tax removed as requested
       emiAmount: parseFloat(acEmiAmount),
@@ -168,9 +169,9 @@ export default function AddEditEmiModal({
 
               <View style={{ marginTop: 12 }}>
                 <DatePicker
-                  label="Purchase Date"
-                  date={acLoanStartDate}
-                  onChange={setAcLoanStartDate}
+                  label="EMI Start Date"
+                  date={acEmiStartDate}
+                  onChange={setAcEmiStartDate}
                 />
               </View>
             </FormSection>

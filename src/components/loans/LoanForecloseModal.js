@@ -47,7 +47,7 @@ export default function LoanForecloseModal({ visible, item, accounts, activeUser
             setLoading(true);
             try {
               const db = await getDb();
-              await forecloseLoan(db, item.id, bankId, numAmt, activeUser.id);
+              await forecloseLoan(activeUser.id, item.id, bankId, numAmt);
               onSuccess();
               onClose();
             } catch (e) {

@@ -16,7 +16,7 @@ export default function AddEditInvestmentModal({
   const [acBalance, setAcBalance] = useState('');
 
   useEffect(() => {
-    if (visible && editingId && accountData) {
+    if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
       setAcBalance((accountData.balance || 0).toString());
     } else if (visible && !editingId) {

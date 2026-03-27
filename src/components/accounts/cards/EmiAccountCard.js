@@ -59,6 +59,38 @@ const EmiAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, o
       </View>
 
       <View style={[styles.statsBox, { backgroundColor: theme.surfaceMuted || theme.background, borderColor: theme.border }]}>
+        {/* Repayment Progress Bar (Only for EMI or if more than 1 installment) */}
+        {loan.isEmi && scheduleLength > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={[styles.label, { color: theme.textSubtle, fontSize: fs(9), fontWeight: '800', letterSpacing: 0.5 }]}>REPAYMENT PROGRESS</Text>
+              <Text style={{ color: item.isClosed === 1 ? theme.success : theme.primary, fontWeight: '900', fontSize: fs(10) }}>
+                {item.isClosed === 1 ? 'SETTLED' : `${completedCount}/${scheduleLength} (${progressPercent}%)`}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', height: 8, gap: 2 }}>
+              {regularSchedule.map((row, i) => {
+                let bgColor = theme.border + '33';
+                if (row.isCompleted) bgColor = theme.success;
+                else if (row.isForeclosed) bgColor = theme.textSubtle + '66';
+                else if (row.monthKey < currentMonthKey) bgColor = theme.danger;
+                else if (row.monthKey === currentMonthKey) bgColor = theme.primary;
+
+                return (
+                  <View 
+                    key={i} 
+                    style={{ 
+                      flex: 1, 
+                      backgroundColor: bgColor, 
+                      borderRadius: 4,
+                      height: '100%'
+                    }} 
+                  />
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Primary Stats */}
         <View style={styles.statsGrid}>

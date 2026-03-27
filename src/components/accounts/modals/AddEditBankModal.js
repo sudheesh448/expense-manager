@@ -19,7 +19,7 @@ export default function AddEditBankModal({
   const [acCustomerId, setAcCustomerId] = useState('');
 
   useEffect(() => {
-    if (visible && editingId && accountData) {
+    if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
       setAcBalance((accountData.balance || 0).toString());
       setAcIfsc(accountData.ifsc || '');

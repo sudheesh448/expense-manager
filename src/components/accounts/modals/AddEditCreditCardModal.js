@@ -22,7 +22,7 @@ export default function AddEditCreditCardModal({
   const [acCvv, setAcCvv] = useState('');
 
   useEffect(() => {
-    if (visible && editingId && accountData) {
+    if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
       setAcBalance((accountData.balance || 0).toString());
       setAcCreditLimit((accountData.creditLimit || 0).toString());

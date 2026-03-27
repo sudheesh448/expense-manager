@@ -22,6 +22,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { setupGlobalErrorHandler } from './src/utils/errorHandler';
 import FloatingDbInspectorButton from './src/components/FloatingDbInspectorButton';
+import DeveloperSandbox from './src/components/DeveloperSandbox';
 
 // Install global error handler as early as possible
 setupGlobalErrorHandler();
@@ -51,7 +52,7 @@ function AccountsNavigator() {
 
 function MainApp() {
   const { activeUser } = useAuth();
-  const { theme } = useTheme();
+  const { theme, fs } = useTheme();
   const [dbReady, setDbReady] = useState(false);
   const [errorString, setErrorString] = useState(null);
 
@@ -115,6 +116,14 @@ function MainApp() {
       </NavigationContainer>
       <SettingsScreen />
       {activeUser?.developerMode === 1 && <FloatingDbInspectorButton />}
+      {activeUser?.sandboxEnabled === 1 && (
+        <DeveloperSandbox 
+          activeUser={activeUser} 
+          theme={theme} 
+          fs={fs} 
+          accounts={[]} 
+        />
+      )}
     </View>
   );
 }

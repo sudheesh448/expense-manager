@@ -7,7 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateUserTimezone, updateUserCurrency } from '../services/storage';
+import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateSandboxEnabled, updateUserTimezone, updateUserCurrency } from '../services/storage';
 import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote } from 'lucide-react-native';
 import { TIMEZONE_OPTIONS, findNearestTimezone } from '../utils/dateUtils';
 import { CURRENCY_OPTIONS } from '../utils/currencyUtils';
@@ -449,6 +449,22 @@ export default function SettingsScreen() {
           <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Floating DB Inspector</Text>
         </View>
         <Switch value={developerMode} onValueChange={handleToggleDeveloperMode} />
+      </View>
+      
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+      <View style={styles.row}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Plus color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Developer Sandbox Button</Text>
+        </View>
+        <Switch 
+          value={activeUser?.sandboxEnabled === 1} 
+          onValueChange={async (val) => {
+            await updateSandboxEnabled(activeUser.id, val);
+            updateUser({ ...activeUser, sandboxEnabled: val ? 1 : 0 });
+          }} 
+        />
       </View>
       
       <View style={[styles.divider, { backgroundColor: theme.border }]} />

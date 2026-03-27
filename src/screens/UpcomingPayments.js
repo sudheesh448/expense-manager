@@ -136,12 +136,13 @@ export default function UpcomingPayments({ navigation, route }) {
         initialScrollIndex={currentMonthIndex !== -1 ? currentMonthIndex : 0}
         getItemLayout={(data, index) => ({ length: width, offset: width * index, index })}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <View style={{ width: width }}>
              <MonthOverviewContent 
                 userId={activeUser.id}
                 monthKey={item.monthKey}
                 dateObj={item.dateObj}
+                isActive={activeIndex === index}
                 theme={theme}
                 fs={fs}
                 currency={getCurrencySymbol(activeUser?.currency)}

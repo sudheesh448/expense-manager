@@ -100,7 +100,7 @@ export default function LoanDetails() {
         try {
             const db = await getDb();
             const amount = selectedEmi?.totalOutflow || account.emiAmount;
-            await payLoanInstallment(db, account.id, settleAccountId, amount, selectedEmi?.monthKey, activeUser.id);
+            await payLoanInstallment(activeUser.id, account.id, settleAccountId, amount, selectedEmi?.monthKey);
             setShowSettleModal(false);
             loadAccount();
         } catch (e) {

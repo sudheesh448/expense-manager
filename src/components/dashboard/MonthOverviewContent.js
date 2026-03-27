@@ -23,9 +23,10 @@ import {
 import { formatInTZ } from '../../utils/dateUtils';
 
 export default function MonthOverviewContent({
-  userId, monthKey, dateObj, theme, fs, currency, onOpenSettle, onPressSelector, refreshKey
+  userId, monthKey, dateObj, isActive, theme, fs, currency, onOpenSettle, onPressSelector, refreshKey
 }) {
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState('pending');
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({ income: 0, expenses: 0, savings: 0 });
@@ -130,8 +131,18 @@ export default function MonthOverviewContent({
   };
 
   useEffect(() => {
-    loadData();
-  }, [userId, monthKey, refreshKey]);
+    if (isActive && !hasLoaded) {
+      loadData();
+      setHasLoaded(true);
+    }
+  }, [isActive, hasLoaded]);
+
+  // When refreshing from outside (focus or settle), re-load only if currently active
+  useEffect(() => {
+    if (isActive && hasLoaded && refreshKey > 0) {
+      loadData();
+    }
+  }, [refreshKey]);
 
   const getNextDateStr = (emiDay, specificMonthKey) => {
     const today = new Date();
@@ -154,10 +165,19 @@ export default function MonthOverviewContent({
     return `${a.name} (${typeMap[a.type] || a.type || 'Acc'})`;
   };
 
+  if (!isActive && !hasLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+         <Text style={{ color: theme.textSubtle, fontSize: fs(12) }}>Loading {format(dateObj, 'MMM yyyy')}...</Text>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
         <ActivityIndicator color={theme.primary} />
+        <Text style={{ color: theme.textSubtle, fontSize: fs(11), marginTop: 12 }}>Fetching records...</Text>
       </View>
     );
   }

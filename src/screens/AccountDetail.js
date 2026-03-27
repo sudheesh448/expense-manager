@@ -49,8 +49,10 @@ import AddRecurringModal from '../components/accounts/AddRecurringModal';
 import BudgetCard from '../components/accounts/cards/BudgetCard';
 import ConvertToEmiModal from '../components/accounts/ConvertToEmiModal';
 import ForecloseEmiModal from '../components/accounts/ForecloseEmiModal';
+import ForecloseBorrowedModal from '../components/accounts/modals/ForecloseBorrowedModal';
 import PausePickerModal from '../components/accounts/PausePickerModal';
 import RepayLoanModal from '../components/accounts/RepayLoanModal';
+import RepayBorrowedModal from '../components/accounts/modals/RepayBorrowedModal';
 import LoanForecloseModal from '../components/loans/LoanForecloseModal';
 
 const SECTION_CONFIG = {
@@ -74,7 +76,9 @@ export default function AccountDetail() {
 
   const { sectionKey, showClosed } = route.params || {};
   const config = SECTION_CONFIG[sectionKey] || { label: 'Details', color: theme.primary };
-  const pageTitle = showClosed ? 'Closed EMIs' : config.label;
+  const pageTitle = showClosed 
+    ? (sectionKey === 'EMI' ? 'Closed EMIs' : 'Closed Loans') 
+    : config.label;
 
   const [accounts, setAccounts] = useState([]);
   const [recurringPayments, setRecurringPayments] = useState([]);
@@ -94,6 +98,8 @@ export default function AccountDetail() {
   const [showForecloseModal, setShowForecloseModal] = useState(false);
   const [showLoanForecloseModal, setShowLoanForecloseModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showRepayBorrowedModal, setShowRepayBorrowedModal] = useState(false);
+  const [showForecloseBorrowedModal, setShowForecloseBorrowedModal] = useState(false);
 
   // State for focused items
   const [editingId, setEditingId] = useState(null);
@@ -150,7 +156,7 @@ export default function AccountDetail() {
 
     if (sectionKey === 'CREDIT_CARD') {
       return baseItems.map(cc => ({ ...cc, totalUsage: cc.balance || 0 }));
-    } else if (sectionKey === 'EMI') {
+    } else if (['EMI', 'LOAN', 'BORROWED', 'LENDED'].includes(sectionKey)) {
       baseItems = baseItems.filter(acc => showClosed ? acc.isClosed : !acc.isClosed);
     }
     return baseItems;
@@ -240,7 +246,14 @@ export default function AccountDetail() {
         text: 'Revert', onPress: async () => {
           const db = await getDb();
           await Promise.all([
-            updateLoanInfo(db, item.id, { ...item, isEmi: 0, loanTenure: (item.loanTenure || 0) / 12 }),
+            updateLoanInfo(activeUser.id, item.id, { 
+              ...item, 
+              isEmi: 0, 
+              loanTenure: (item.loanTenure || item.tenure || 0),
+              loanInterestRate: (item.loanInterestRate || item.interestRate || 0),
+              loanStartDate: (item.loanStartDate || item.startDate || new Date().toISOString()),
+              principal: (item.principal || item.balance || 0)
+            }),
             deleteRecurringByAccountId(item.id)
           ]);
           loadData();
@@ -329,15 +342,21 @@ export default function AccountDetail() {
               onPauseMonth={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
               onForeclose={(i) => {
                 setSelectedItem(i);
-                if (['LOAN', 'BORROWED', 'LENDED'].includes(i.type)) {
+                if (i.type === 'BORROWED') {
+                  setShowForecloseBorrowedModal(true);
+                } else if (['LOAN', 'LENDED'].includes(i.type)) {
                   setShowLoanForecloseModal(true);
                 } else {
                   setShowForecloseModal(true);
                 }
               }}
-              onRepay={(i) => {
+               onRepay={(i) => {
                 setSelectedItem(i);
-                setShowRepayModal(true);
+                if (i.type === 'BORROWED') {
+                  setShowRepayBorrowedModal(true);
+                } else {
+                  setShowRepayModal(true);
+                }
               }}
               onConvert={(i) => { setSelectedItem(i); setShowConvertModal(true); }}
               onRevert={handleRevertFromEmi}
@@ -362,10 +381,10 @@ export default function AccountDetail() {
         </TouchableOpacity>
       )}
 
-      {sectionKey === 'EMI' && !showClosed && (
+      {['EMI', 'LOAN', 'BORROWED', 'LENDED'].includes(sectionKey) && !showClosed && (
         <TouchableOpacity
           style={[styles.archiveBtn, { backgroundColor: '#10b981', borderColor: '#10b981' }]}
-          onPress={() => navigation.push('AccountDetail', { sectionKey: 'EMI', showClosed: true })}
+          onPress={() => navigation.push('AccountDetail', { sectionKey, showClosed: true })}
         >
           <Archive color="#FFF" size={20} />
         </TouchableOpacity>
@@ -402,6 +421,12 @@ export default function AccountDetail() {
         onClose={() => setShowRepayModal(false)} onSuccess={loadData}
       />
 
+      <RepayBorrowedModal
+        visible={showRepayBorrowedModal} item={selectedItem} accounts={accounts}
+        activeUser={activeUser}
+        onClose={() => setShowRepayBorrowedModal(false)} onSuccess={loadData}
+      />
+
       <ConvertToEmiModal
         visible={showConverModal} item={selectedItem} accounts={accounts}
         activeUser={activeUser}
@@ -429,6 +454,12 @@ export default function AccountDetail() {
         visible={showLoanForecloseModal} item={selectedItem} accounts={accounts}
         activeUser={activeUser}
         onClose={() => setShowLoanForecloseModal(false)} onSuccess={loadData}
+      />
+
+      <ForecloseBorrowedModal
+        visible={showForecloseBorrowedModal} item={selectedItem} accounts={accounts}
+        activeUser={activeUser}
+        onClose={() => setShowForecloseBorrowedModal(false)} onSuccess={loadData}
       />
 
       <AddBudgetModal

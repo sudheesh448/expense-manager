@@ -3,6 +3,8 @@ export * from './utils';
 export * from './bankStorage';
 export * from './creditCardStorage';
 export * from './loanStorage';
+export * from './borrowedStorage';
+export * from './lendedStorage';
 export * from './investmentStorage';
 export * from './emiStorage';
 export * from './sipStorage';

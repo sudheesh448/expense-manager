@@ -2,6 +2,8 @@ import React from 'react';
 import AddEditBankModal from './modals/AddEditBankModal';
 import AddEditCreditCardModal from './modals/AddEditCreditCardModal';
 import AddEditLoanModal from './modals/AddEditLoanModal';
+import AddEditBorrowedModal from './modals/AddEditBorrowedModal';
+import AddEditLendedModal from './modals/AddEditLendedModal';
 import AddEditEmiModal from './modals/AddEditEmiModal';
 import AddEditSipModal from './modals/AddEditSipModal';
 import AddEditInvestmentModal from './modals/AddEditInvestmentModal';
@@ -24,9 +26,13 @@ export default function AddEditAccountModal(props) {
       return <AddEditCreditCardModal {...props} />;
     
     case 'LOAN':
-    case 'BORROWED':
-    case 'LENDED':
       return <AddEditLoanModal {...props} />;
+    
+    case 'BORROWED':
+      return <AddEditBorrowedModal {...props} />;
+    
+    case 'LENDED':
+      return <AddEditLendedModal {...props} />;
     
     case 'EMI':
       return <AddEditEmiModal {...props} />;

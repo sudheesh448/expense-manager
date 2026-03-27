@@ -35,9 +35,9 @@ const LoanAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, 
     try {
       const db = await getDb();
       if (mode === 'PREPAYMENT') {
-        await recordPrincipalPrepayment(db, item.id, bankId, amount, activeUser.id);
+        await recordPrincipalPrepayment(activeUser.id, item.id, bankId, amount);
       } else {
-        await recordLoanFine(db, item.id, bankId, amount, activeUser.id);
+        await recordLoanFine(activeUser.id, item.id, bankId, amount, currentMonthKey);
       }
       setShowActionModal(false);
       onRefresh?.();

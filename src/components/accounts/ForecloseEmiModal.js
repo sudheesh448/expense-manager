@@ -64,7 +64,7 @@ export default function ForecloseEmiModal({ visible, item, accounts, activeUser,
     );
   };
 
-  const stats = item ? getLoanStats(item) : null;
+  const stats = item ? getEmiStats(item) : null;
 
   return (
     <Modal

@@ -97,9 +97,11 @@ export default function Dashboard() {
   };
 
 
+  const [refreshKey, setRefreshKey] = useState(0);
   useFocusEffect(
     React.useCallback(() => {
       loadData();
+      setRefreshKey(prev => prev + 1);
     }, [activeUser.id])
   );
 
@@ -204,17 +206,19 @@ export default function Dashboard() {
             index,
           })}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <View style={{ width: SLIDE_WIDTH }}>
                  <MonthlyInsights 
                     userId={activeUser.id}
                     monthKey={item.monthKey}
                     label={item.label}
                     dateObj={item.dateObj}
+                    isActive={activeIndex === index}
                     theme={theme}
                     fs={fs}
                     currency={getCurrencySymbol(activeUser?.currency)}
                     onPressSelector={() => setShowMonthSelector(true)}
+                    refreshKey={refreshKey}
                 />
             </View>
           )}
