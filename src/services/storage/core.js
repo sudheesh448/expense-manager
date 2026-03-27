@@ -26,12 +26,13 @@ export const initDatabase = async () => {
         forecastMonths INTEGER DEFAULT 6,
         autoBackupEnabled INTEGER DEFAULT 0,
         lastBackupTimestamp TEXT DEFAULT NULL,
-        dashboardGraphs TEXT DEFAULT '{"monthlyTrends":true,"totalSavings":true,"ccUtilization":true,"totalCcOutstanding":true,"nonEmiCcOutstanding":true,"monthlyExpenseSplit":true,"totalLiabilities":true}',
+        dashboardGraphs TEXT DEFAULT '{"monthlyInsight":true,"savingsOverview":true,"ccDues":true,"ccTotal":true}',
         customGraphs TEXT DEFAULT '[]',
         graphOrder TEXT DEFAULT '[]',
         developerMode INTEGER DEFAULT 0,
         timezone TEXT DEFAULT '${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}',
-        currency TEXT DEFAULT '${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}'
+        currency TEXT DEFAULT '${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}',
+        accountVisibility TEXT DEFAULT '{"BANK":true,"CREDIT_CARD":true,"INVESTMENT":true,"SIP":true,"LOAN":true,"BORROWED":true,"LENDED":true,"EMI":true,"RECURRING":true}'
       );`);
 
       await database.execAsync(`CREATE TABLE IF NOT EXISTS transactions (
@@ -425,6 +426,7 @@ export const initDatabase = async () => {
       await addColumn('transactions', 'monthKey', 'TEXT');
       await addColumn('users', 'timezone', 'TEXT', `'${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}'`);
       await addColumn('users', 'currency', 'TEXT', `'${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}'`);
+      await addColumn('users', 'accountVisibility', 'TEXT', "'{\"BANK\":true,\"CREDIT_CARD\":true,\"INVESTMENT\":true,\"SIP\":true,\"LOAN\":true,\"BORROWED\":true,\"LENDED\":true,\"EMI\":true,\"RECURRING\":true}'");
       await addColumn('sip_accounts', 'balance', 'REAL', 0);
 
       // These are updates to existing columns or complex defaults, not simple column additions

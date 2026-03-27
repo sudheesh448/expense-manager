@@ -90,22 +90,28 @@ export default function Projections() {
   };
 
     useEffect(() => {
-        if (todayY !== null && shouldScroll && !hasScrolledInitial.current) {
-            // Find previous month's Y if available
-            const prevMonthDate = subMonths(new Date(), 1);
-            const prevMonthKey = format(prevMonthDate, 'yyyy-MM');
-            const prevY = layoutOffsets.current ? layoutOffsets.current[prevMonthKey] : undefined;
+        if (todayY !== null && shouldScroll && !hasScrolledInitial.current && timeline.length > 0) {
+            const currentIndex = timeline.findIndex(m => m.monthKey === todayKey);
+            let targetY = todayY;
             
-            const targetY = (prevY !== undefined) ? prevY : todayY;
+            if (currentIndex > 0) {
+                const prevMonthKey = timeline[currentIndex - 1].monthKey;
+                const prevY = layoutOffsets.current ? layoutOffsets.current[prevMonthKey] : undefined;
+                if (prevY !== undefined) {
+                    targetY = prevY;
+                }
+            } else if (currentIndex === 0) {
+                targetY = 0;
+            }
 
             scrollRef.current?.scrollTo({
-                y: Math.max(0, targetY - 20),
+                y: Math.max(0, targetY - 10),
                 animated: true
             });
             hasScrolledInitial.current = true;
             setShouldScroll(false);
         }
-    }, [todayY, shouldScroll]);
+    }, [todayY, shouldScroll, timeline]);
 
   useFocusEffect(
     React.useCallback(() => {

@@ -53,7 +53,7 @@ const SECTIONS = [
 export default function Accounts() {
   const navigation = useNavigation();
   const { activeUser } = useAuth();
-  const { theme, fs, setIsSettingsOpen } = useTheme();
+  const { theme, fs, setIsSettingsOpen, accountVisibility } = useTheme();
 
   const [accounts, setAccounts] = useState([]);
   const [recurringPayments, setRecurringPayments] = useState([]);
@@ -105,8 +105,8 @@ export default function Accounts() {
 
       } else if (s.key === 'CREDIT_CARD') {
         res[s.key] = items.reduce((sum, i) => sum + (i ? (i.creditLimit || 0) - (i.totalUsage || 0) : 0), 0);
-      } else if (s.key === 'SIP') {
-        res[s.key] = items.reduce((sum, i) => sum + (i ? (i.totalPaid || 0) : 0), 0);
+      } else if (s.key === 'SIP' || s.key === 'INVESTMENT') {
+        res[s.key] = items.reduce((sum, i) => sum + (i ? (i.balance ?? i.totalPaid ?? 0) : 0), 0);
       } else {
         res[s.key] = items.reduce((sum, i) => sum + (i ? (i.balance || 0) : 0), 0);
       }
@@ -182,7 +182,7 @@ export default function Accounts() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} colors={[theme.primary]} tintColor={theme.primary} />}
       >
         <View style={styles.grid}>
-          {SECTIONS.map((section) => (
+          {SECTIONS.filter(section => accountVisibility[section.key]).map((section) => (
             <TouchableOpacity
               key={section.key}
               style={[styles.tile, { backgroundColor: theme.surface, borderColor: theme.border }]}

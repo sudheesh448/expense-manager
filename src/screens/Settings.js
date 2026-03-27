@@ -8,7 +8,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateSandboxEnabled, updateUserTimezone, updateUserCurrency } from '../services/storage';
-import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote } from 'lucide-react-native';
+import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote, Landmark, CreditCard, TrendingUp, BarChart2, Building2, HandCoins, Users, Clock, RefreshCw } from 'lucide-react-native';
 import { TIMEZONE_OPTIONS, findNearestTimezone } from '../utils/dateUtils';
 import { CURRENCY_OPTIONS } from '../utils/currencyUtils';
 import CustomDropdown from '../components/CustomDropdown';
@@ -19,7 +19,7 @@ import { ShieldCheck } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const { activeUser, updateUser, logout } = useAuth();
-  const { theme, fs, themeMode, toggleTheme, fontScale, setFontScalePreference, dashboardGraphs, setDashboardGraphsPreference, customGraphs, setCustomGraphsPreference, graphOrder, setGraphOrderPreference, isSettingsOpen, setIsSettingsOpen } = useTheme();
+  const { theme, fs, themeMode, toggleTheme, fontScale, setFontScalePreference, accountVisibility, setAccountVisibilityPreference, dashboardGraphs, setDashboardGraphsPreference, customGraphs, setCustomGraphsPreference, graphOrder, setGraphOrderPreference, isSettingsOpen, setIsSettingsOpen } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [activeCategory, setActiveCategory] = useState(null); // 'APPEARANCE' | 'FINANCIAL' | 'SECURITY' | 'BACKUP'
@@ -32,12 +32,16 @@ export default function SettingsScreen() {
   const [selectedCurrency, setSelectedCurrency] = useState(activeUser?.currency || Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR');
   
   const [showGraphsModal, setShowGraphsModal] = useState(false);
+  const [showAccountVisibilityModal, setShowAccountVisibilityModal] = useState(false);
   const [showCustomGraphsModal, setShowCustomGraphsModal] = useState(false);
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
   const [categories, setCategories] = useState([]);
   const [newGraphName, setNewGraphName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [editingGraphId, setEditingGraphId] = useState(null);
+  const [newGraphIsScrollable, setNewGraphIsScrollable] = useState(true);
+  const [newCatName, setNewCatName] = useState('');
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   
   const [showWipePinModal, setShowWipePinModal] = useState(false);
   const [showDatabaseInspector, setShowDatabaseInspector] = useState(false);
@@ -56,8 +60,8 @@ export default function SettingsScreen() {
       setAutoBackupEnabled(backupSettings.enabled);
     };
     const loadCategories = async () => {
-      const cats = await getCategories(activeUser.id, 'EXPENSE');
-      setCategories(cats);
+      const cats = await getCategories(activeUser.id, 'ALL');
+      setCategories(cats.sort((a, b) => (a.isSystem || 0) - (b.isSystem || 0)));
     };
     loadSettings();
     loadCategories();
@@ -170,17 +174,14 @@ export default function SettingsScreen() {
 
   const getOrderedGraphs = () => {
     const defaultKeys = [
-      { id: 'monthlyTrends', name: 'Monthly Trends', alwaysOn: true },
-      { id: 'totalSavings', name: 'Total Savings Breakdown' },
-      { id: 'totalCcOutstanding', name: 'Total CC Outstandings' },
-      { id: 'nonEmiCcOutstanding', name: 'CC (Excl. EMIs)' },
-      { id: 'monthlyExpenseSplit', name: 'Monthly Expense Split' },
-      { id: 'totalLiabilities', name: 'Total Liabilities Breakdown' }
+      { id: 'monthlyInsight', name: 'Monthly Insight', alwaysOn: true },
+      { id: 'savingsOverview', name: 'Savings Overview' },
+      { id: 'ccDues', name: 'Credit Card Dues' },
+      { id: 'ccTotal', name: 'Credit Card Total' }
     ];
     
     const fullDefaultOrder = [
-      'monthlyTrends', 'totalSavings', 'totalCcOutstanding', 
-      'nonEmiCcOutstanding', 'monthlyExpenseSplit', 'totalLiabilities',
+      'monthlyInsight', 'savingsOverview', 'ccDues', 'ccTotal',
       ...(customGraphs || []).map(g => g.id)
     ];
 
@@ -253,6 +254,21 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      const { saveCategory } = await import('../services/storage/transactionStorage');
+      await saveCategory(activeUser.id, newCatName.trim(), 'EXPENSE');
+      setNewCatName('');
+      setShowAddCategoryModal(false);
+      // Reload categories
+      const cats = await getCategories(activeUser.id, 'ALL');
+      setCategories(cats.sort((a, b) => (a.isSystem || 0) - (b.isSystem || 0)));
+    } catch (e) {
+      Alert.alert('Error', 'Category already exists or failed to save.');
+    }
+  };
+
   const handleSaveCustomGraph = async () => {
     if (!newGraphName.trim() || selectedCategories.length === 0) {
       Alert.alert('Error', 'Please provide a name and select at least one category.');
@@ -261,13 +277,14 @@ export default function SettingsScreen() {
     let updatedGraphs;
     if (editingGraphId) {
       updatedGraphs = customGraphs.map(g => 
-        g.id === editingGraphId ? { ...g, name: newGraphName, categoryIds: selectedCategories } : g
+        g.id === editingGraphId ? { ...g, name: newGraphName, categoryIds: selectedCategories, isScrollable: newGraphIsScrollable } : g
       );
     } else {
       updatedGraphs = [...customGraphs, {
         id: Math.random().toString(36).substr(2, 9),
         name: newGraphName,
         categoryIds: selectedCategories,
+        isScrollable: newGraphIsScrollable,
         enabled: true
       }];
     }
@@ -279,6 +296,7 @@ export default function SettingsScreen() {
     setNewGraphName('');
     setSelectedCategories([]);
     setEditingGraphId(null);
+    setNewGraphIsScrollable(true);
     setShowAddCustomModal(false);
   };
 
@@ -296,6 +314,7 @@ export default function SettingsScreen() {
     setNewGraphName(graph.name);
     setSelectedCategories(graph.categoryIds);
     setEditingGraphId(graph.id);
+    setNewGraphIsScrollable(graph.isScrollable !== false); // Default to true if undefined
     setShowAddCustomModal(true);
   };
 
@@ -388,6 +407,14 @@ export default function SettingsScreen() {
           <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Custom Graphs</Text>
         </View>
         <Plus color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <TouchableOpacity style={styles.row} onPress={() => setShowAccountVisibilityModal(true)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
+          <Layout color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Account Visibility</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
       </TouchableOpacity>
     </View>
   );
@@ -585,6 +612,49 @@ export default function SettingsScreen() {
         </View>
       </SafeAreaView>
 
+      {/* ACCOUNT VISIBILITY MODAL */}
+      <Modal visible={showAccountVisibilityModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAccountVisibilityModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 20, paddingTop: insets.top, paddingBottom: 16 }}>
+            <Text style={{ fontWeight: 'bold', color: theme.text, fontSize: fs(18) }}>Account Visibility</Text>
+            <TouchableOpacity onPress={() => setShowAccountVisibilityModal(false)}><X color={theme.textSubtle} size={24} /></TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 20 }}>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), marginVertical: 12, fontStyle: 'italic' }}>Control which account types are visible in the Accounts tab. Bank accounts are always visible.</Text>
+            {[
+              { key: 'BANK', label: 'Bank Accounts', Icon: Landmark, color: '#3b82f6', canHide: false },
+              { key: 'CREDIT_CARD', label: 'Credit Cards', Icon: CreditCard, color: '#8b5cf6', canHide: true },
+              { key: 'INVESTMENT', label: 'Investments', Icon: TrendingUp, color: '#10b981', canHide: true },
+              { key: 'SIP', label: 'SIPs', Icon: BarChart2, color: '#06b6d4', canHide: true },
+              { key: 'LOAN', label: 'Loans', Icon: Building2, color: '#f59e0b', canHide: true },
+              { key: 'BORROWED', label: 'Borrowed (Liability)', Icon: HandCoins, color: '#ef4444', canHide: true },
+              { key: 'LENDED', label: 'Lended (Asset)', Icon: Users, color: '#10b981', canHide: true },
+              { key: 'EMI', label: 'Credit Card EMIs', Icon: Clock, color: '#ec4899', canHide: true },
+              { key: 'RECURRING', label: 'Monthly Schedules', Icon: RefreshCw, color: '#ef4444', canHide: true },
+            ].map((section) => (
+              <View key={section.key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ backgroundColor: section.color + '15', padding: 8, borderRadius: 10, marginRight: 16 }}>
+                    <section.Icon color={section.color} size={22} />
+                  </View>
+                  <Text style={{ fontWeight: '500', color: theme.text, fontSize: fs(16) }}>{section.label}</Text>
+                </View>
+                <Switch 
+                  value={accountVisibility[section.key]} 
+                  disabled={!section.canHide}
+                  onValueChange={(val) => {
+                    setAccountVisibilityPreference({ ...accountVisibility, [section.key]: val });
+                  }} 
+                />
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.primary, marginBottom: 20, marginHorizontal: 20 }]} onPress={() => setShowAccountVisibilityModal(false)}>
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Done</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
+
       {/* DASHBOARD GRAPHS MODAL (FLOATING) */}
       <Modal visible={showGraphsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowGraphsModal(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
@@ -665,12 +735,43 @@ export default function SettingsScreen() {
                 <TextInput style={{ flex: 1, color: theme.text, height: 50 }} placeholder="e.g. My Savings" placeholderTextColor={theme.textMuted} value={newGraphName} onChangeText={setNewGraphName} />
               </View>
             </View>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textMuted, marginBottom: 8 }}>Select Categories</Text>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textMuted, marginBottom: 4 }}>Select Categories</Text>
+              <Text style={{ fontSize: fs(10), color: theme.textSubtle, fontStyle: 'italic' }}>Interactive pie chart {newGraphIsScrollable ? 'with monthly selector' : 'fixed to current month'} on dashboard</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.background, padding: 12, borderRadius: 12, marginBottom: 16 }}>
+              <View>
+                <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '600' }}>Scrollable Graph</Text>
+                <Text style={{ color: theme.textSubtle, fontSize: fs(10) }}>Enable historical month selection</Text>
+              </View>
+              <Switch value={newGraphIsScrollable} onValueChange={setNewGraphIsScrollable} />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textMuted, marginBottom: 4 }}>Select Categories</Text>
+                <Text style={{ fontSize: fs(10), color: theme.textSubtle, fontStyle: 'italic' }}>Interactive pie chart {newGraphIsScrollable ? 'with monthly selector' : 'fixed to current month'} on dashboard</Text>
+              </View>
+              <TouchableOpacity 
+                style={{ backgroundColor: theme.primary + '15', padding: 8, borderRadius: 10 }}
+                onPress={() => setShowAddCategoryModal(true)}
+              >
+                <Plus color={theme.primary} size={20} />
+              </TouchableOpacity>
+            </View>
+
             <View style={{ maxHeight: 250 }}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {categories.map(cat => (
                   <TouchableOpacity key={cat.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border }} onPress={() => setSelectedCategories(prev => prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id])}>
-                    <Text style={{ color: theme.text, fontSize: fs(14) }}>{cat.name}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: cat.isSystem ? '700' : '400' }}>{cat.name}</Text>
+                    {cat.isSystem === 1 && (
+                      <View style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ color: theme.primary, fontSize: fs(8), fontWeight: 'bold' }}>SYSTEM</Text>
+                      </View>
+                    )}
+                  </View>
                     {selectedCategories.includes(cat.id) ? <CheckCircle2 color={theme.success} size={20} /> : <Circle color={theme.textSubtle} size={20} />}
                   </TouchableOpacity>
                 ))}
@@ -678,6 +779,37 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.primary, marginTop: 24 }]} onPress={handleSaveCustomGraph}>
               <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Save Graph</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ADD CATEGORY MODAL */}
+      <Modal visible={showAddCategoryModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={[{ width: '100%', borderRadius: 16, padding: 20, maxWidth: 350, backgroundColor: theme.surface }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ fontWeight: 'bold', color: theme.text, fontSize: fs(18) }}>Create New Category</Text>
+              <TouchableOpacity onPress={() => setShowAddCategoryModal(false)}><X color={theme.text} size={24} /></TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textMuted, marginBottom: 8 }}>Category Name</Text>
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 15, borderColor: theme.border, backgroundColor: theme.background }}>
+                <TextInput 
+                  style={{ flex: 1, color: theme.text, height: 50 }} 
+                  placeholder="e.g. Subscriptions" 
+                  placeholderTextColor={theme.textMuted} 
+                  autoFocus
+                  value={newCatName} 
+                  onChangeText={setNewCatName} 
+                />
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={[styles.closeBtn, { backgroundColor: theme.primary }]} 
+              onPress={handleAddCategory}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Create Category</Text>
             </TouchableOpacity>
           </View>
         </View>

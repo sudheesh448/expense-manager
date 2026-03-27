@@ -99,3 +99,31 @@ export const updateSandboxEnabled = async (userId, enabled) => {
   const database = await getDb();
   await database.runAsync('UPDATE users SET sandboxEnabled = ? WHERE id = ?', [enabled ? 1 : 0, userId || '']);
 };
+
+export const getAccountVisibility = async (userId) => {
+  const database = await getDb();
+  const user = await database.getFirstAsync('SELECT accountVisibility FROM users WHERE id = ?', [userId || '']);
+  const defaultVisibility = {
+    BANK: true,
+    CREDIT_CARD: true,
+    INVESTMENT: true,
+    SIP: true,
+    LOAN: true,
+    BORROWED: true,
+    LENDED: true,
+    EMI: true,
+    RECURRING: true
+  };
+  
+  if (user && user.accountVisibility) {
+    try {
+      return { ...defaultVisibility, ...JSON.parse(user.accountVisibility) };
+    } catch (e) {}
+  }
+  return defaultVisibility;
+};
+
+export const updateAccountVisibility = async (userId, visibility) => {
+  const database = await getDb();
+  await database.runAsync('UPDATE users SET accountVisibility = ? WHERE id = ?', [JSON.stringify(visibility), userId || '']);
+};

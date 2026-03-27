@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { useAuth } from './AuthContext';
-import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCustomGraphs, saveCustomGraphs } from '../services/storage';
+import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCustomGraphs, saveCustomGraphs, getAccountVisibility, updateAccountVisibility } from '../services/storage';
 import { lightTheme, darkTheme } from '../theme/colors';
 
 const ThemeContext = createContext();
@@ -14,13 +14,22 @@ export const ThemeProvider = ({ children }) => {
   const [themeMode, setThemeMode] = useState(systemScheme || 'light'); 
   const [isThemeResolved, setIsThemeResolved] = useState(false);
   const [fontScale, setFontScale] = useState('medium'); 
+  const [accountVisibility, setAccountVisibility] = useState({
+    BANK: true,
+    CREDIT_CARD: true,
+    INVESTMENT: true,
+    SIP: true,
+    LOAN: true,
+    BORROWED: true,
+    LENDED: true,
+    EMI: true,
+    RECURRING: true
+  });
   const [dashboardGraphs, setDashboardGraphs] = useState({ 
-    monthlyTrends: true, 
-    totalSavings: true, 
-    totalCcOutstanding: true, 
-    nonEmiCcOutstanding: true,
-    monthlyExpenseSplit: true,
-    totalLiabilities: true 
+    monthlyInsight: true, 
+    savingsOverview: true,
+    ccDues: true,
+    ccTotal: true
   });
   const [graphOrder, setGraphOrder] = useState([]);
   const [customGraphs, setCustomGraphs] = useState([]);
@@ -33,14 +42,23 @@ export const ThemeProvider = ({ children }) => {
     } else {
       setThemeMode(systemScheme || 'light');
       setFontScale('medium');
+      setAccountVisibility({
+        BANK: true,
+        CREDIT_CARD: true,
+        INVESTMENT: true,
+        SIP: true,
+        LOAN: true,
+        BORROWED: true,
+        LENDED: true,
+        EMI: true,
+        RECURRING: true
+      });
       setIsThemeResolved(true); // No user, so it's "resolved" to system/light
       setDashboardGraphs({ 
-        monthlyTrends: true, 
-        totalSavings: true, 
-        totalCcOutstanding: true, 
-        nonEmiCcOutstanding: true,
-        monthlyExpenseSplit: true,
-        totalLiabilities: true
+        monthlyInsight: true, 
+        savingsOverview: true,
+        ccDues: true,
+        ccTotal: true
       });
       setGraphOrder([]);
       setCustomGraphs([]);
@@ -49,22 +67,39 @@ export const ThemeProvider = ({ children }) => {
 
   const loadPreferences = async () => {
     try {
-      const [savedTheme, savedScale, dashboardPref, savedCustom] = await Promise.all([
+      const [savedTheme, savedScale, dashboardPref, savedCustom, savedVisibility] = await Promise.all([
         getUserTheme(activeUser.id),
         getUserFontScale(activeUser.id),
         getDashboardGraphs(activeUser.id),
         getCustomGraphs(activeUser.id),
+        getAccountVisibility(activeUser.id),
       ]);
       
       if (savedTheme) setThemeMode(savedTheme);
       if (savedScale) setFontScale(savedScale);
+      if (savedVisibility) setAccountVisibility(savedVisibility);
       
+      const customList = savedCustom || [];
+      setCustomGraphs(customList);
+
       if (dashboardPref) {
-        setDashboardGraphs(dashboardPref.graphs);
-        if (dashboardPref.order) setGraphOrder(dashboardPref.order);
+        const defaultGraphs = { 
+          monthlyInsight: true, 
+          savingsOverview: true,
+          ccDues: true,
+          ccTotal: true
+        };
+        setDashboardGraphs({ ...defaultGraphs, ...(dashboardPref.graphs || {}) });
+        
+        const defaultOrder = ['savingsOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
+        const savedOrder = dashboardPref.order || [];
+        // Add any missing default or custom graphs to the saved order
+        const mergedOrder = [...savedOrder];
+        [...defaultOrder, ...customList.map(g => g.id)].forEach(id => {
+          if (!mergedOrder.includes(id)) mergedOrder.push(id);
+        });
+        setGraphOrder(mergedOrder);
       }
-      
-      if (savedCustom) setCustomGraphs(savedCustom || []);
       setIsThemeResolved(true);
     } catch (e) {
       console.error('Failed to load preferences', e);
@@ -83,6 +118,13 @@ export const ThemeProvider = ({ children }) => {
     setFontScale(scale);
     if (activeUser) {
       await updateFontScale(activeUser.id, scale);
+    }
+  };
+
+  const setAccountVisibilityPreference = async (visibility) => {
+    setAccountVisibility(visibility);
+    if (activeUser) {
+      await updateAccountVisibility(activeUser.id, visibility);
     }
   };
 
@@ -107,15 +149,32 @@ export const ThemeProvider = ({ children }) => {
 
   const setCustomGraphsPreference = async (graphs) => {
     setCustomGraphs(graphs);
+    
+    // Automatically update graphOrder to include any new custom graphs
+    const newOrder = [...graphOrder];
+    let changed = false;
+    graphs.forEach(g => {
+      if (!newOrder.includes(g.id)) {
+        newOrder.push(g.id);
+        changed = true;
+      }
+    });
+
     if (activeUser) {
       await saveCustomGraphs(activeUser.id, graphs);
+      if (changed) {
+        setGraphOrder(newOrder);
+        await updateDashboardGraphs(activeUser.id, dashboardGraphs, newOrder);
+      }
     }
   };
 
   return (
     <ThemeContext.Provider value={{ 
       theme, themeMode, toggleTheme, 
-      fontScale, setFontScalePreference,        dashboardGraphs, 
+      fontScale, setFontScalePreference,
+      accountVisibility, setAccountVisibilityPreference,
+      dashboardGraphs, 
         setDashboardGraphsPreference,
         graphOrder,
         setGraphOrderPreference,

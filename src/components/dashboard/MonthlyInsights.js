@@ -223,7 +223,7 @@ export default function MonthlyInsights({ userId, monthKey, label, dateObj, isAc
 }
 
 const styles = StyleSheet.create({
-  mainCard: { borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, marginHorizontal: 2, height: 280 },
+  mainCard: { borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, marginHorizontal: 2, height: 280, marginBottom: 20 },
   header: { marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { flexDirection: 'row', alignItems: 'center' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 12 },

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, TrendingUp, TrendingDown, CheckCircle2, Circle, Trash2, PlusCircle, CreditCard, ChevronRight, Check, ArrowUpRight
 } from 'lucide-react-native';
+import CustomHeader from '../CustomHeader';
 
 const { width, height } = Dimensions.get('window');
 

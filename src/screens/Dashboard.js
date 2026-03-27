@@ -17,6 +17,8 @@ import {
 import PriorityAlerts from '../components/dashboard/PriorityAlerts';
 import MonthlyInsights from '../components/dashboard/MonthlyInsights';
 import SavingsOverviewCard from '../components/dashboard/SavingsOverviewCard';
+import CreditCardStatusCard from '../components/dashboard/CreditCardStatusCard';
+import CustomGraphCard from '../components/dashboard/CustomGraphCard';
 import { getCurrencySymbol } from '../utils/currencyUtils';
 
 const { width } = Dimensions.get('window');
@@ -184,45 +186,110 @@ export default function Dashboard() {
       >
         <PriorityAlerts alerts={alerts} theme={theme} fs={fs} />
         
-        <SavingsOverviewCard 
-          userId={activeUser.id} 
-          theme={theme} 
-          fs={fs} 
-          currency={getCurrencySymbol(activeUser?.currency)} 
-        />
-        
-        <FlatList
-          ref={flatListRef}
-          data={monthsList}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          initialScrollIndex={currentMonthIndex !== -1 ? currentMonthIndex : 0}
-          getItemLayout={(data, index) => ({
-            length: SLIDE_WIDTH,
-            offset: SLIDE_WIDTH * index,
-            index,
-          })}
-          keyExtractor={item => item.id}
-          renderItem={({ item, index }) => (
-            <View style={{ width: SLIDE_WIDTH }}>
-                 <MonthlyInsights 
-                    userId={activeUser.id}
-                    monthKey={item.monthKey}
-                    label={item.label}
-                    dateObj={item.dateObj}
-                    isActive={activeIndex === index}
-                    theme={theme}
-                    fs={fs}
-                    currency={getCurrencySymbol(activeUser?.currency)}
-                    onPressSelector={() => setShowMonthSelector(true)}
-                    refreshKey={refreshKey}
+        {(() => {
+          const defaultOrder = ['savingsOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
+          const currentOrder = (graphOrder && graphOrder.length > 0) ? graphOrder : [...defaultOrder, ...(customGraphs || []).map(g => g.id)];
+          
+          return currentOrder.map((graphId) => {
+            // Check if it's a default graph and if it's enabled
+            if (graphId === 'savingsOverview') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <SavingsOverviewCard 
+                  key="savingsOverview"
+                  userId={activeUser.id} 
+                  theme={theme} 
+                  fs={fs} 
+                  currency={getCurrencySymbol(activeUser?.currency)} 
                 />
-            </View>
-          )}
-        />
+              );
+            }
+
+            if (graphId === 'ccDues') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <CreditCardStatusCard 
+                  key="ccDues"
+                  userId={activeUser.id} 
+                  theme={theme} 
+                  fs={fs} 
+                  currency={getCurrencySymbol(activeUser?.currency)} 
+                  mode="dues"
+                />
+              );
+            }
+
+            if (graphId === 'ccTotal') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <CreditCardStatusCard 
+                  key="ccTotal"
+                  userId={activeUser.id} 
+                  theme={theme} 
+                  fs={fs} 
+                  currency={getCurrencySymbol(activeUser?.currency)} 
+                  mode="total"
+                />
+              );
+            }
+
+            if (graphId === 'monthlyInsight') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <FlatList
+                  key="monthlyInsight"
+                  ref={flatListRef}
+                  data={monthsList}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={onScroll}
+                  scrollEventThrottle={16}
+                  initialScrollIndex={currentMonthIndex !== -1 ? currentMonthIndex : 0}
+                  getItemLayout={(data, index) => ({
+                    length: SLIDE_WIDTH,
+                    offset: SLIDE_WIDTH * index,
+                    index,
+                  })}
+                  keyExtractor={item => item.id}
+                  renderItem={({ item, index }) => (
+                    <View style={{ width: SLIDE_WIDTH }}>
+                         <MonthlyInsights 
+                            userId={activeUser.id}
+                            monthKey={item.monthKey}
+                            label={item.label}
+                            dateObj={item.dateObj}
+                            isActive={activeIndex === index}
+                            theme={theme}
+                            fs={fs}
+                            currency={getCurrencySymbol(activeUser?.currency)}
+                            onPressSelector={() => setShowMonthSelector(true)}
+                            refreshKey={refreshKey}
+                        />
+                    </View>
+                  )}
+                />
+              );
+            }
+
+            // Handle Custom Graphs
+            const customGraph = customGraphs.find(g => g.id === graphId);
+            if (customGraph) {
+              return (
+                <CustomGraphCard 
+                  key={graphId}
+                  userId={activeUser.id}
+                  theme={theme}
+                  fs={fs}
+                  currency={getCurrencySymbol(activeUser?.currency)}
+                  customGraph={customGraph}
+                />
+              );
+            }
+
+            return null;
+          });
+        })()}
 
         {/* Year/Month Selection Modal */}
         <Modal visible={showMonthSelector} transparent animationType="fade">

@@ -283,6 +283,50 @@ export default function AccountDetail() {
         contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} colors={[theme.primary]} tintColor={theme.primary} />}
       >
+        {/* Portfolio Summary Card for SIP/Investment */}
+        {(sectionKey === 'SIP' || sectionKey === 'INVESTMENT') && items.length > 0 && (
+          <View style={[styles.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+               <View>
+                 <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Portfolio</Text>
+                 <Text style={{ color: theme.text, fontSize: fs(24), fontWeight: '900', letterSpacing: -1 }}>
+                   {getCurrencySymbol(activeUser?.currency)}
+                   {items.reduce((sum, i) => sum + (i.balance ?? i.totalPaid ?? 0), 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                 </Text>
+               </View>
+               <View style={[styles.summaryIcon, { backgroundColor: config.color + '15' }]}>
+                 <TrendingUp color={config.color} size={24} />
+               </View>
+            </View>
+
+            <View style={styles.summaryStats}>
+              <View style={styles.summaryStatItem}>
+                <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold', marginBottom: 4 }}>INVESTED</Text>
+                <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>
+                  {getCurrencySymbol(activeUser?.currency)}{items.reduce((sum, i) => sum + (i.totalPaid || 0), 0).toLocaleString()}
+                </Text>
+              </View>
+              
+              <View style={styles.summaryStatItem}>
+                 {(() => {
+                   const totalInv = items.reduce((sum, i) => sum + (i.totalPaid || 0), 0);
+                   const currentVal = items.reduce((sum, i) => sum + (i.balance ?? i.totalPaid ?? 0), 0);
+                   const returns = currentVal - totalInv;
+                   const returnPerc = totalInv > 0 ? (returns / totalInv) * 100 : 0;
+                   return (
+                     <>
+                        <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold', marginBottom: 4, textAlign: 'right' }}>OVERALL RETURNS</Text>
+                        <Text style={{ color: returns >= 0 ? theme.success : theme.danger, fontSize: fs(14), fontWeight: '800', textAlign: 'right' }}>
+                          {returns >= 0 ? '+' : ''}{getCurrencySymbol(activeUser?.currency)}{Math.abs(returns).toLocaleString()} ({returnPerc.toFixed(1)}%)
+                        </Text>
+                     </>
+                   );
+                 })()}
+              </View>
+            </View>
+          </View>
+        )}
+
         {sectionKey === 'RECURRING' && (
           <View style={[styles.tabContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {['EXPENSE', 'INCOME', 'BUDGET'].map(tab => (
@@ -545,5 +589,33 @@ const styles = StyleSheet.create({
   tabText: {
     fontWeight: '800',
     letterSpacing: 0.5
+  },
+  summaryCard: {
+    padding: 20,
+    borderRadius: 24,
+    marginBottom: 24,
+    borderWidth: 1,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  summaryStatItem: {
+    flex: 1,
   }
 });
