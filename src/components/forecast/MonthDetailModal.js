@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, TrendingUp, TrendingDown, CheckCircle2, Circle, Trash2, PlusCircle, CreditCard, ChevronRight, Check, ArrowUpRight
 } from 'lucide-react-native';
@@ -30,19 +31,21 @@ export default function MonthDetailModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <View>
-              <Text style={[styles.headerTitle, { color: theme.text, fontSize: fs(20) }]}>{month.label}</Text>
-              <Text style={{ color: theme.textSubtle, fontSize: fs(12) }}>Monthly Forecast Details</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={24} color={theme.text} />
-            </TouchableOpacity>
-          </View>
+    <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={{ flex: 1 }}>
+          <CustomHeader
+            title={month.label}
+            subtitle="Monthly Forecast Details"
+            leftComponent={
+              <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                <X size={24} color={theme.text} />
+              </TouchableOpacity>
+            }
+            theme={theme}
+            fs={fs}
+            containerStyle={{ paddingTop: 12 }}
+          />
 
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             {/* Quick Summary Cards */}
@@ -213,7 +216,7 @@ export default function MonthDetailModal({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

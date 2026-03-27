@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import { useAuth } from './AuthContext';
 import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCustomGraphs, saveCustomGraphs } from '../services/storage';
 import { lightTheme, darkTheme } from '../theme/colors';
@@ -9,8 +10,10 @@ const SCALE_FACTORS = { small: 0.85, medium: 1.0, large: 1.15 };
 
 export const ThemeProvider = ({ children }) => {
   const { activeUser } = useAuth();
-  const [themeMode, setThemeMode] = useState('light'); // 'light' | 'dark'
-  const [fontScale, setFontScale] = useState('medium'); // 'small' | 'medium' | 'large'
+  const systemScheme = useColorScheme();
+  const [themeMode, setThemeMode] = useState(systemScheme || 'light'); 
+  const [isThemeResolved, setIsThemeResolved] = useState(false);
+  const [fontScale, setFontScale] = useState('medium'); 
   const [dashboardGraphs, setDashboardGraphs] = useState({ 
     monthlyTrends: true, 
     totalSavings: true, 
@@ -24,11 +27,13 @@ export const ThemeProvider = ({ children }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
+    setIsThemeResolved(false);
     if (activeUser) {
       loadPreferences();
     } else {
-      setThemeMode('light');
+      setThemeMode(systemScheme || 'light');
       setFontScale('medium');
+      setIsThemeResolved(true); // No user, so it's "resolved" to system/light
       setDashboardGraphs({ 
         monthlyTrends: true, 
         totalSavings: true, 
@@ -40,7 +45,7 @@ export const ThemeProvider = ({ children }) => {
       setGraphOrder([]);
       setCustomGraphs([]);
     }
-  }, [activeUser]);
+  }, [activeUser, systemScheme]);
 
   const loadPreferences = async () => {
     try {
@@ -60,8 +65,10 @@ export const ThemeProvider = ({ children }) => {
       }
       
       if (savedCustom) setCustomGraphs(savedCustom || []);
+      setIsThemeResolved(true);
     } catch (e) {
       console.error('Failed to load preferences', e);
+      setIsThemeResolved(true);
     }
   };
 
@@ -116,6 +123,7 @@ export const ThemeProvider = ({ children }) => {
         setCustomGraphsPreference,
         isSettingsOpen,
         setIsSettingsOpen,
+        isThemeResolved,
       fs 
     }}>
       {children}

@@ -7,7 +7,7 @@ import { Calendar, X, ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getCurrencySymbol } from '../utils/currencyUtils';
-import { getAccounts, getCategories, payEmi, payExpectedExpense } from '../services/storage';
+import { getAccounts, payEmi, payExpectedExpense } from '../services/storage';
 import CustomHeader from '../components/CustomHeader';
 import CustomDropdown from '../components/CustomDropdown';
 import EmiSettlementModal from '../components/emis/EmiSettlementModal';
@@ -56,18 +56,14 @@ export default function UpcomingPayments({ navigation, route }) {
 
   // Settlement States
   const [accounts, setAccounts] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [settleAccountId, setSettleAccountId] = useState(null);
-  const [settleCategoryId, setSettleCategoryId] = useState(null);
 
   useEffect(() => {
     const loadBasics = async () => {
       const accs = await getAccounts(activeUser.id);
       setAccounts(accs);
-      const cats = await getCategories(activeUser.id, ['EXPENSE', 'INCOME']);
-      setCategories(cats.filter(c => c.isSystem !== 1));
     };
     loadBasics();
   }, [activeUser.id]);
@@ -92,7 +88,6 @@ export default function UpcomingPayments({ navigation, route }) {
     setSelectedItem(item);
     const bank = accounts.find(a => a.type === 'BANK');
     setSettleAccountId(bank?.id || null);
-    setSettleCategoryId(item.categoryId || null);
     setShowSettleModal(true);
   };
 
@@ -103,7 +98,7 @@ export default function UpcomingPayments({ navigation, route }) {
         const targetEmiAccountId = selectedItem.linkedAccountId || selectedItem.id;
         await payEmi(activeUser.id, targetEmiAccountId, settleAccountId, selectedItem.amount, selectedItem.monthKey, selectedItem.id);
       } else {
-        await payExpectedExpense(activeUser.id, selectedItem.id, settleAccountId, settleCategoryId);
+        await payExpectedExpense(activeUser.id, selectedItem.id, settleAccountId);
       }
       setShowSettleModal(false);
       setRefreshKey(prev => prev + 1);
@@ -215,15 +210,6 @@ export default function UpcomingPayments({ navigation, route }) {
                     options={accounts.filter(acc => selectedItem?.type === 'INCOME' ? acc.type === 'BANK' : (acc.type === 'BANK' || acc.type === 'CREDIT_CARD')).map(acc => ({ label: acc.name, value: acc.id, accountType: acc.type }))}
                     selectedValue={settleAccountId} onSelect={setSettleAccountId} placeholder="Select Account" showTabs={true} theme={theme} fs={fs}
                  />
-                 {selectedItem?.type !== 'SIP_PAY' && (
-                   <>
-                     <Text style={[styles.modalSubtitle, { color: theme.textMuted, fontSize: fs(10), marginTop: 20 }]}>SELECT CATEGORY (OPTIONAL)</Text>
-                     <CustomDropdown
-                        options={[{ label: 'Default', value: null }, ...categories.filter(c => c.type === (selectedItem?.type || 'EXPENSE')).map(cat => ({ label: cat.name, value: cat.id }))]}
-                        selectedValue={settleCategoryId} onSelect={setSettleCategoryId} placeholder="Select Category" theme={theme} fs={fs}
-                     />
-                   </>
-                 )}
                  <TouchableOpacity style={[styles.settleActionBtn, { backgroundColor: theme.primary, marginTop: 24 }]} onPress={handleSettle}>
                    <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>{selectedItem?.type === 'INCOME' ? 'Receive Income' : 'Mark as Paid'}</Text>
                  </TouchableOpacity>

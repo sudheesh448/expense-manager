@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Modal, TextInput,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Check, Plus } from 'lucide-react-native';
 import { saveCategory } from '../../services/storage';
 import CustomHeader from '../CustomHeader';
@@ -10,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 export default function CategorySelectionModal({ visible, categories, selectedIds, onClose, onSelect }) {
   const { theme, fs } = useTheme();
+  const insets = useSafeAreaInsets();
   const [tempIds, setTempIds] = useState([]);
   
   // New Category States
@@ -88,25 +90,27 @@ export default function CategorySelectionModal({ visible, categories, selectedId
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      transparent={false}
       onRequestClose={onClose}
     >
-      <View style={[styles.modalWrap, { backgroundColor: theme.background }]}>
-        <CustomHeader
-          title="Select Categories"
-          leftComponent={
-            <TouchableOpacity onPress={onClose}>
-              <X color={theme.text} size={22} />
-            </TouchableOpacity>
-          }
-          rightComponent={
-              <TouchableOpacity onPress={handleDone}>
-                  <Text style={{ color: theme.primary, fontWeight: '700', fontSize: fs(15) }}>Done</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          <CustomHeader
+            title="Select Categories"
+            leftComponent={
+              <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                <X color={theme.text} size={24} />
               </TouchableOpacity>
-          }
-          theme={theme}
-          fs={fs}
-        />
+            }
+            rightComponent={
+                <TouchableOpacity onPress={handleDone} style={{ padding: 8 }}>
+                    <Text style={{ color: theme.primary, fontWeight: '700', fontSize: fs(15) }}>Done</Text>
+                </TouchableOpacity>
+            }
+            theme={theme}
+            fs={fs}
+            containerStyle={{ paddingTop: 12 }}
+          />
 
         <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
           <View style={{ padding: 16 }}>
@@ -170,7 +174,8 @@ export default function CategorySelectionModal({ visible, categories, selectedId
                 <Text style={styles.doneBtnText}>Confirm Selection</Text>
             </TouchableOpacity>
         </View>
-      </View>
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }

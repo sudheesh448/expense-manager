@@ -44,7 +44,6 @@ export default function LoanDetails() {
     const [selectedEmi, setSelectedEmi] = useState(null);
     const [settleAccountId, setSettleAccountId] = useState(null);
     const [accounts, setAccounts] = useState([]);
-    const [categories, setCategories] = useState([]);
     const flatListRef = React.useRef(null);
     const hasScrolledInitial = React.useRef(false);
 
@@ -55,13 +54,6 @@ export default function LoanDetails() {
         setAccount(found);
         setAccounts(accs);
 
-        // Fetch categories
-        try {
-            const cats = await getCategories(activeUser.id, 'EXPENSE');
-            setCategories(cats.filter(c => c.isSystem !== 1));
-        } catch (e) {
-            console.error('Error loading categories', e);
-        }
     };
 
     useFocusEffect(React.useCallback(() => { 

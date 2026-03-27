@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { X, User, IndianRupee, Tag, Clock, CheckCircle2, FileText } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { generateId, getDb, saveLendedInfo, updateLendedInfo } from '../../../services/storage';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
+import CustomHeader from '../../CustomHeader';
 import CustomDropdown from '../../CustomDropdown';
 import DatePicker from '../../DatePicker';
 import { FormSection, styles } from './ModalShared';
@@ -57,7 +58,7 @@ export default function AddEditLendedModal({
       loanType: 'ONE_TIME',
       interestRate: 0,
       tenure: 1, // Simplified for one-time
-      bankAccountId: !editingId ? acTargetBankId : (accountData?.linkedAccountId || accountData?.bankAccountId || null),
+      bankAccountId: acTargetBankId,
       note: acNote.trim(),
       userId: activeUser.id,
       paidMonths: accountData?.paidMonths || 0
@@ -77,16 +78,19 @@ export default function AddEditLendedModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.modalWrap, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
-            <X size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: theme.text, fontSize: fs(18) }]}>
-            {editingId ? 'Edit Lended Account' : 'Add Lended Account'}
-          </Text>
-          <View style={{ width: 40 }} />
-        </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          <CustomHeader
+            title={editingId ? 'Edit Lended Account' : 'Add Lended Account'}
+            leftComponent={
+              <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                <X size={24} color={theme.text} />
+              </TouchableOpacity>
+            }
+            theme={theme}
+            fs={fs}
+            containerStyle={{ paddingTop: 12 }}
+          />
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
           <View style={{ gap: 20 }}>
@@ -160,6 +164,7 @@ export default function AddEditLendedModal({
           </View>
         </ScrollView>
       </View>
-    </Modal>
-  );
+    </SafeAreaView>
+  </Modal>
+);
 }

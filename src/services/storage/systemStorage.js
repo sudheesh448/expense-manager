@@ -26,7 +26,7 @@ export const exportData = async (userId) => {
   await initDatabase();
   const database = await getDb();
   const tables = [
-    'users', 'bank_accounts', 'credit_cards', 'loans', 'investments', 
+    'users', 'bank_accounts', 'credit_cards', 'loans', 'borrowed', 'lended', 'investments', 
     'emis', 'sip_accounts', 'transactions', 'expected_expenses', 'categories', 
     'recurring_payments', 'account_logs', 'category_budgets'
   ];
@@ -55,7 +55,7 @@ export const importData = async (userId, jsonString) => {
   try {
     await database.withTransactionAsync(async () => {
       const userScopedTables = [
-        'bank_accounts', 'credit_cards', 'loans', 'investments', 'emis',
+        'bank_accounts', 'credit_cards', 'loans', 'borrowed', 'lended', 'investments', 'emis',
         'sip_accounts', 'transactions', 'expected_expenses', 'categories', 
         'recurring_payments', 'account_logs', 'category_budgets'
       ];

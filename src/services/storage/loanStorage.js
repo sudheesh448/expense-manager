@@ -1,7 +1,7 @@
-import { generateId, getDb, updateAccountBalanceSQL, ensureCategoryExists } from './utils';
-import { saveExpectedExpense } from './transactionStorage';
-import { addMonths, format } from 'date-fns';
+import { format } from 'date-fns';
 import { calculateAmortizationSchedule } from '../../utils/loanUtils';
+import { saveExpectedExpense } from './transactionStorage';
+import { ensureCategoryExists, generateId, getDb, updateAccountBalanceSQL } from './utils';
 
 /**
  * Local helper to calculate EMI amount based on standard formula.
@@ -44,7 +44,7 @@ export const saveLoanInfo = async (activeUserId, loanData, currencySymbol) => {
   const status = {};
   const paidMonthsCount = parseInt(loanData.paidMonths || 0, 10);
   const startDate = new Date(loanData.emiStartDate || loanData.loanStartDate || new Date().toISOString());
-  
+
   for (let i = 1; i <= paidMonthsCount; i++) {
     const d = new Date(startDate);
     d.setMonth(startDate.getMonth() + i - 1);
@@ -66,7 +66,7 @@ export const saveLoanInfo = async (activeUserId, loanData, currencySymbol) => {
       emiStartDate, taxPercentage, serviceCharge
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id, userId, loanData.name, loanData.type, loanData.loanType || 'ONE_TIME', 
+      id, userId, loanData.name, loanData.type, loanData.loanType || 'ONE_TIME',
       P_original, P_current, rate, tenureValue, start, 0,
       finalEmi, loanData.bankAccountId, category.id, paidMonthsCount, JSON.stringify(status),
       loanData.emiStartDate, loanData.loanTaxPercentage || 0, loanData.loanServiceCharge || 0
@@ -132,7 +132,7 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
   const paidMonthsCount = parseInt(loanData.paidMonths || 0, 10);
   const statusObj = {};
   const forecastStart = new Date(loanData.emiStartDate || loanData.loanStartDate || new Date().toISOString());
-  
+
   for (let i = 1; i <= months; i++) {
     const d = new Date(forecastStart);
     d.setMonth(d.getMonth() + i - 1);
@@ -148,7 +148,7 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
       emiStartDate = ?, installmentStatus = ?, taxPercentage = ?, serviceCharge = ?
     WHERE id = ?`,
     [
-      loanData.name, loanData.type, loanData.loanType || 'ONE_TIME', 
+      loanData.name, loanData.type, loanData.loanType || 'ONE_TIME',
       P_original, P_current, rate, tenureValue, start,
       finalEmi, loanData.bankAccountId, loanData.paidMonths,
       loanData.emiStartDate, JSON.stringify(statusObj), loanData.loanTaxPercentage || 0, loanData.loanServiceCharge || 0,
@@ -182,7 +182,7 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
  */
 export const recordPrincipalPrepayment = async (userId, accountId, bankAccountId, amount) => {
   const database = await getDb();
-  
+
   // 1. Fetch current loan details
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
   if (!account) throw new Error('Account not found');
@@ -200,7 +200,7 @@ export const recordPrincipalPrepayment = async (userId, accountId, bankAccountId
   const newPrincipal = Math.max(0, account.principal - amount);
   const prepayments = JSON.parse(account.prepayments || '[]');
   prepayments.push({ amount, date: new Date().toISOString() });
-  
+
   // 4. Auto-close if principal hits 0
   const isClosed = newPrincipal <= 0 ? 1 : 0;
 
@@ -240,34 +240,34 @@ export const syncLoanExpectedExpenses = async (userId, accountId) => {
 
   // 2. Regenerate from schedule
   const futureRows = schedule.filter(r => r.monthKey >= currentMonthKey && !r.isCompleted);
-  
+
   if (account.loanType === 'EMI') {
     for (const row of futureRows) {
-        await saveExpectedExpense(database, {
-            userId,
-            name: `Loan EMI: ${account.name}`,
-            amount: row.totalOutflow,
-            type: 'EXPENSE',
-            monthKey: row.monthKey,
-            date: row.monthDate.toISOString(),
-            linkedAccountId: accountId,
-            categoryId: category.id
-        });
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Loan EMI: ${account.name}`,
+        amount: row.totalOutflow,
+        type: 'EXPENSE',
+        monthKey: row.monthKey,
+        date: row.monthDate.toISOString(),
+        linkedAccountId: accountId,
+        categoryId: category.id
+      });
     }
   } else if (account.loanType === 'ONE_TIME') {
-      const finalRow = schedule[schedule.length - 1];
-      if (finalRow && !finalRow.isCompleted) {
-        await saveExpectedExpense(database, {
-            userId,
-            name: `Loan Settlement: ${account.name}`,
-            amount: finalRow.totalOutflow,
-            type: 'EXPENSE',
-            monthKey: finalRow.monthKey,
-            date: finalRow.monthDate.toISOString(),
-            linkedAccountId: accountId,
-            categoryId: category.id
-        });
-      }
+    const finalRow = schedule[schedule.length - 1];
+    if (finalRow && !finalRow.isCompleted) {
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Loan Settlement: ${account.name}`,
+        amount: finalRow.totalOutflow,
+        type: 'EXPENSE',
+        monthKey: finalRow.monthKey,
+        date: finalRow.monthDate.toISOString(),
+        linkedAccountId: accountId,
+        categoryId: category.id
+      });
+    }
   }
 };
 
@@ -327,7 +327,7 @@ export const payLoanInstallment = async (userId, accountId, bankAccountId, amoun
   // Here we simplify by using the schedule helper
   const schedule = calculateAmortizationSchedule(account);
   const row = schedule.find(r => r.monthKey === monthKey);
-  
+
   // Use schedule values or fall back to full amount as principal if not found
   const interestPortion = row ? row.interest : 0;
   const principalPortion = row ? row.principal : amount;

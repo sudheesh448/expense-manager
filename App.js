@@ -52,7 +52,7 @@ function AccountsNavigator() {
 
 function MainApp() {
   const { activeUser } = useAuth();
-  const { theme, fs } = useTheme();
+  const { theme, fs, isThemeResolved } = useTheme();
   const [dbReady, setDbReady] = useState(false);
   const [errorString, setErrorString] = useState(null);
 
@@ -60,7 +60,6 @@ function MainApp() {
     initDatabase()
       .then(() => setDbReady(true))
       .catch((e) => {
-        console.error("Database initialization failed", e);
         setErrorString(e.message || String(e));
       });
   }, []);
@@ -82,11 +81,11 @@ function MainApp() {
     );
   }
 
-  if (!dbReady) {
+  if (!dbReady || !isThemeResolved) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f4f6' }}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={{ marginTop: 16, color: '#4b5563', fontWeight: 'bold' }}>Initializing Secure SQL Database...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: 16, color: theme.textSubtle, fontWeight: 'bold' }}>Initializing...</Text>
       </View>
     );
   }
@@ -115,8 +114,8 @@ function MainApp() {
         <AppNavigator />
       </NavigationContainer>
       <SettingsScreen />
-      {activeUser?.developerMode === 1 && <FloatingDbInspectorButton />}
-      {activeUser?.sandboxEnabled === 1 && (
+      {process.env.EXPO_PUBLIC_ENABLE_DEV_OPTIONS === 'true' && activeUser?.developerMode === 1 && <FloatingDbInspectorButton />}
+      {process.env.EXPO_PUBLIC_ENABLE_DEV_OPTIONS === 'true' && activeUser?.sandboxEnabled === 1 && (
         <DeveloperSandbox 
           activeUser={activeUser} 
           theme={theme} 

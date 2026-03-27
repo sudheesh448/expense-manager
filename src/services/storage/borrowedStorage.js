@@ -1,7 +1,7 @@
-import { generateId, getDb, updateAccountBalanceSQL, ensureCategoryExists } from './utils';
-import { saveExpectedExpense } from './transactionStorage';
-import { addMonths, format } from 'date-fns';
+import { format } from 'date-fns';
 import { calculateAmortizationSchedule } from '../../utils/loanUtils';
+import { saveExpectedExpense } from './transactionStorage';
+import { ensureCategoryExists, generateId, getDb, updateAccountBalanceSQL } from './utils';
 
 /**
  * Local helper to calculate EMI amount based on standard formula.
@@ -42,7 +42,7 @@ export const saveBorrowedInfo = async (activeUserId, data, currencySymbol) => {
   const status = {};
   const paidMonthsCount = parseInt(data.paidMonths || 0, 10);
   const startDate = new Date(data.emiStartDate || data.loanStartDate || new Date().toISOString());
-  
+
   for (let i = 1; i <= paidMonthsCount; i++) {
     const d = new Date(startDate);
     d.setMonth(startDate.getMonth() + i - 1);
@@ -64,7 +64,7 @@ export const saveBorrowedInfo = async (activeUserId, data, currencySymbol) => {
       emiStartDate, taxPercentage, serviceCharge, note
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id, userId, data.name, 'BORROWED', data.loanType || 'ONE_TIME', 
+      id, userId, data.name, 'BORROWED', data.loanType || 'ONE_TIME',
       P_original, P_current, rate, tenureValue, start, 0,
       finalEmi, data.bankAccountId, repayCategory, paidMonthsCount, JSON.stringify(status),
       data.emiStartDate, data.loanTaxPercentage || 0, data.loanServiceCharge || 0, data.note
@@ -90,7 +90,7 @@ export const saveBorrowedInfo = async (activeUserId, data, currencySymbol) => {
 export const updateBorrowedInfo = async (activeUserId, accountId, data) => {
   const database = await getDb();
   const userId = activeUserId;
-  
+
   // Fetch existing to handle principal delta
   const oldRecord = await database.getFirstAsync('SELECT * FROM borrowed WHERE id = ?', [accountId]);
   if (!oldRecord) throw new Error('Borrowed account not found');
@@ -124,7 +124,7 @@ export const updateBorrowedInfo = async (activeUserId, accountId, data) => {
   const paidMonthsCount = parseInt(data.paidMonths || 0, 10);
   const statusObj = {};
   const forecastStart = new Date(data.emiStartDate || data.loanStartDate || new Date().toISOString());
-  
+
   for (let i = 1; i <= months; i++) {
     const d = new Date(forecastStart);
     d.setMonth(d.getMonth() + i - 1);
@@ -140,7 +140,7 @@ export const updateBorrowedInfo = async (activeUserId, accountId, data) => {
       emiStartDate = ?, installmentStatus = ?, taxPercentage = ?, serviceCharge = ?, note = ?
     WHERE id = ?`,
     [
-      data.name, 'BORROWED', data.loanType || 'ONE_TIME', 
+      data.name, 'BORROWED', data.loanType || 'ONE_TIME',
       P_original, P_current, rate, tenureValue, start,
       finalEmi, data.bankAccountId, data.paidMonths,
       data.emiStartDate, JSON.stringify(statusObj), data.loanTaxPercentage || 0, data.loanServiceCharge || 0, data.note,
@@ -192,7 +192,7 @@ export const recordBorrowedPrepayment = async (userId, accountId, bankAccountId,
   );
 
   await updateAccountBalanceSQL(database, bankAccountId, amount, 'EXPENSE', false);
-  
+
   // 6. Sync future expected expenses to reflect new schedule/tenure
   await syncBorrowedExpectedExpenses(userId, accountId);
 
@@ -215,34 +215,34 @@ export const syncBorrowedExpectedExpenses = async (userId, accountId) => {
   );
 
   const futureRows = schedule.filter(r => r.monthKey >= currentMonthKey && !r.isCompleted);
-  
+
   if (account.loanType === 'EMI') {
     for (const row of futureRows) {
-        await saveExpectedExpense(database, {
-            userId,
-            name: `Borrowed Repay: ${account.name}`,
-            amount: row.totalOutflow,
-            type: 'EXPENSE',
-            monthKey: row.monthKey,
-            date: row.monthDate.toISOString(),
-            linkedAccountId: accountId,
-            categoryId: category
-        });
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Borrowed Repay: ${account.name}`,
+        amount: row.totalOutflow,
+        type: 'EXPENSE',
+        monthKey: row.monthKey,
+        date: row.monthDate.toISOString(),
+        linkedAccountId: accountId,
+        categoryId: category
+      });
     }
   } else if (account.loanType === 'ONE_TIME') {
-      const finalRow = schedule[schedule.length - 1];
-      if (finalRow && !finalRow.isCompleted) {
-        await saveExpectedExpense(database, {
-            userId,
-            name: `Borrowed Settlement: ${account.name}`,
-            amount: finalRow.totalOutflow,
-            type: 'EXPENSE',
-            monthKey: finalRow.monthKey,
-            date: finalRow.monthDate.toISOString(),
-            linkedAccountId: accountId,
-            categoryId: category
-        });
-      }
+    const finalRow = schedule[schedule.length - 1];
+    if (finalRow && !finalRow.isCompleted) {
+      await saveExpectedExpense(database, {
+        userId,
+        name: `Borrowed Settlement: ${account.name}`,
+        amount: finalRow.totalOutflow,
+        type: 'EXPENSE',
+        monthKey: finalRow.monthKey,
+        date: finalRow.monthDate.toISOString(),
+        linkedAccountId: accountId,
+        categoryId: category
+      });
+    }
   }
 };
 
@@ -280,7 +280,7 @@ export const payBorrowedInstallment = async (userId, accountId, bankAccountId, a
 
   const schedule = calculateAmortizationSchedule(account);
   const row = schedule.find(r => r.monthKey === monthKey);
-  
+
   const principalPortion = row ? row.principal : amount;
 
   const status = typeof account.installmentStatus === 'string' ? JSON.parse(account.installmentStatus || '{}') : (account.installmentStatus || {});

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { X, IndianRupee, Tag, Clock, CheckCircle2 } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { generateId, getDb, saveLoanInfo, updateLoanInfo } from '../../../services/storage';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
+import CustomHeader from '../../CustomHeader';
 import CustomDropdown from '../../CustomDropdown';
 import DatePicker from '../../DatePicker';
 import { FormSection, styles } from './ModalShared';
@@ -20,7 +21,7 @@ export default function AddEditLoanModal({
   const [acLoanPrincipal, setAcLoanPrincipal] = useState('');
   const [acInterestRate, setAcInterestRate] = useState('');
   const [acTenure, setAcTenure] = useState('');
-  const [acLoanType, setAcLoanType] = useState('ONE_TIME');
+  const [acLoanType, setAcLoanType] = useState('EMI');
   const [acDisbursementDate, setAcDisbursementDate] = useState(new Date());
   const [acEmiStartDate, setAcEmiStartDate] = useState(new Date());
   const [acServiceCharge, setAcServiceCharge] = useState('');
@@ -30,22 +31,22 @@ export default function AddEditLoanModal({
   useEffect(() => {
     if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
-      setAcLoanPrincipal((accountData.actualDisbursedPrincipal || accountData.disbursedPrincipal || accountData.loanPrincipal || accountData.productPrice || '').toString());
-      setAcInterestRate((accountData.interestRate || accountData.loanInterestRate || '').toString());
-      setAcTenure((accountData.tenure || accountData.loanTenure || '').toString());
-      setAcLoanType(accountData.loanType || 'ONE_TIME');
-      setAcDisbursementDate(accountData.startDate ? new Date(accountData.startDate) : (accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date()));
+      setAcBalance((accountData.balance || 0).toString());
+      setAcLoanPrincipal((accountData.loanPrincipal || accountData.principal || '').toString());
+      setAcInterestRate((accountData.loanInterestRate || accountData.interestRate || '').toString());
+      setAcTenure((accountData.loanTenure || accountData.tenure || '').toString());
+      setAcLoanType(accountData.loanType || 'EMI');
+      setAcDisbursementDate(accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date());
       setAcEmiStartDate(accountData.emiStartDate ? new Date(accountData.emiStartDate) : new Date());
       setAcServiceCharge((accountData.processingFee || accountData.loanServiceCharge || '').toString());
       setAcTaxPercentage((accountData.loanTaxPercentage || '0').toString());
       setAcTargetBankId(accountData.linkedAccountId || accountData.bankAccountId || '');
     } else if (visible && !editingId) {
       setAcName('');
-      setAcBalance('');
       setAcLoanPrincipal('');
       setAcInterestRate('');
       setAcTenure('');
-      setAcLoanType('ONE_TIME');
+      setAcLoanType('EMI');
       setAcDisbursementDate(new Date());
       setAcEmiStartDate(new Date());
       setAcServiceCharge('');
@@ -56,7 +57,7 @@ export default function AddEditLoanModal({
 
   const handleSave = async () => {
     if (!acName.trim()) {
-      Alert.alert("Required Field", "Please enter a name.");
+      Alert.alert("Required Field", "Please enter a lender name.");
       return;
     }
     if (!acLoanPrincipal || parseFloat(acLoanPrincipal) <= 0) {
@@ -68,7 +69,7 @@ export default function AddEditLoanModal({
       return;
     }
 
-    const type = openSection?.key || 'LOAN';
+    const type = 'LOAN';
     const data = {
       name: acName.trim(),
       type,
@@ -187,16 +188,19 @@ export default function AddEditLoanModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.modalWrap, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
-            <X size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: theme.text, fontSize: fs(18) }]}>
-            {editingId ? `Edit ${openSection?.label || 'Loan'}` : `Add ${openSection?.label || 'Loan'}`}
-          </Text>
-          <View style={{ width: 40 }} />
-        </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          <CustomHeader
+            title={editingId ? `Edit ${openSection?.label || 'Loan'}` : `Add ${openSection?.label || 'Loan'}`}
+            leftComponent={
+              <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                <X size={24} color={theme.text} />
+              </TouchableOpacity>
+            }
+            theme={theme}
+            fs={fs}
+            containerStyle={{ paddingTop: 12 }}
+          />
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
           <View style={{ gap: 20 }}>
@@ -324,6 +328,7 @@ export default function AddEditLoanModal({
           </View>
         </ScrollView>
       </View>
-    </Modal>
-  );
+    </SafeAreaView>
+  </Modal>
+);
 }

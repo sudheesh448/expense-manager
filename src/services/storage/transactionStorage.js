@@ -180,6 +180,9 @@ export const getCategories = async (userId, type = 'EXPENSE') => {
   if (!userId) return [];
   try {
     const database = await getDb();
+    if (type === 'ALL' || type === null) {
+      return await database.getAllAsync('SELECT * FROM categories WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL)', [userId]);
+    }
     if (Array.isArray(type)) {
       const placeholders = type.map(() => '?').join(',');
       return await database.getAllAsync(

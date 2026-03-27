@@ -513,73 +513,77 @@ export default function SettingsScreen() {
 
   return (
     <Modal visible={isSettingsOpen} animationType="slide" onRequestClose={() => setIsSettingsOpen(false)}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
-        
-        {/* Header Setup based on Active Category */}
-        {!activeCategory ? (
-          <CustomHeader 
-            title="Profile & Settings"
-            rightComponent={
-              <TouchableOpacity onPress={() => setIsSettingsOpen(false)} style={styles.iconButton}>
-                <X color={theme.textSubtle} size={28} />
-              </TouchableOpacity>
-            }
-            theme={theme}
-            fs={fs}
-          />
-        ) : (
-          <CustomHeader
-            title={activeCategory === 'APPEARANCE' ? 'Appearance' : 
-                 activeCategory === 'FINANCIAL' ? 'Financial Planning' :
-                 activeCategory === 'SECURITY' ? 'Security' : 
-                 activeCategory === 'DEVELOPER' ? 'Developer Options' : 'Backup & Recovery'}
-            leftComponent={
-              <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.iconButton}>
-                <ArrowLeft color={theme.text} size={28} />
-              </TouchableOpacity>
-            }
-            theme={theme}
-            fs={fs}
-          />
-        )}
-
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          {/* Header Setup based on Active Category */}
           {!activeCategory ? (
-            <>
-              <View style={styles.profileHeader}>
-                <View style={[styles.avatar, { backgroundColor: theme.primarySoft }]}>
-                  <User color={theme.primary} size={48} />
-                </View>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={[styles.name, { color: theme.text, fontSize: fs(26) }]}>{activeUser?.username}</Text>
-                  <Text style={[styles.badge, { backgroundColor: theme.primary }]}>Local Device Profile</Text>
-                </View>
-              </View>
-              
-              <View style={{ marginTop: 24 }}>
-                <CategoryMenuItem title="Appearance" icon={Moon} value="APPEARANCE" />
-                <CategoryMenuItem title="Financial Planning" icon={PieChart} value="FINANCIAL" />
-                <CategoryMenuItem title="Security" icon={Fingerprint} value="SECURITY" />
-                <CategoryMenuItem title="Backup & Recovery" icon={Database} value="BACKUP" />
-                <CategoryMenuItem title="Developer Options" icon={Wrench} value="DEVELOPER" />
-              </View>
-
-              <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]} onPress={() => { setIsSettingsOpen(false); logout(); }}>
-                <LogOut color={theme.danger} size={22} style={{ marginRight: 10 }} />
-                <Text style={{ color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }}>Lock App</Text>
-              </TouchableOpacity>
-            </>
+            <CustomHeader 
+              title="Profile & Settings"
+              rightComponent={
+                <TouchableOpacity onPress={() => setIsSettingsOpen(false)} style={styles.iconButton}>
+                  <X color={theme.textSubtle} size={28} />
+                </TouchableOpacity>
+              }
+              theme={theme}
+              fs={fs}
+              containerStyle={{ paddingTop: 12 }}
+            />
           ) : (
-            <>
-              {activeCategory === 'APPEARANCE' && renderAppearance()}
-              {activeCategory === 'FINANCIAL' && renderFinancial()}
-              {activeCategory === 'SECURITY' && renderSecurity()}
-              {activeCategory === 'BACKUP' && renderBackup()}
-              {activeCategory === 'DEVELOPER' && renderDeveloper()}
-            </>
-
+            <CustomHeader
+              title={activeCategory === 'APPEARANCE' ? 'Appearance' : 
+                   activeCategory === 'FINANCIAL' ? 'Financial Planning' :
+                   activeCategory === 'SECURITY' ? 'Security' : 
+                   activeCategory === 'DEVELOPER' ? 'Developer Options' : 'Backup & Recovery'}
+              leftComponent={
+                <TouchableOpacity onPress={() => setActiveCategory(null)} style={styles.iconButton}>
+                  <ArrowLeft color={theme.text} size={28} />
+                </TouchableOpacity>
+              }
+              theme={theme}
+              fs={fs}
+              containerStyle={{ paddingTop: 12 }}
+            />
           )}
-        </ScrollView>
+
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}>
+            {!activeCategory ? (
+              <>
+                <View style={styles.profileHeader}>
+                  <View style={[styles.avatar, { backgroundColor: theme.primarySoft }]}>
+                    <User color={theme.primary} size={48} />
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={[styles.name, { color: theme.text, fontSize: fs(26) }]}>{activeUser?.username}</Text>
+                    <Text style={[styles.badge, { backgroundColor: theme.primary }]}>Local Device Profile</Text>
+                  </View>
+                </View>
+                
+                <View style={{ marginTop: 24 }}>
+                  <CategoryMenuItem title="Appearance" icon={Moon} value="APPEARANCE" />
+                  <CategoryMenuItem title="Financial Planning" icon={PieChart} value="FINANCIAL" />
+                  <CategoryMenuItem title="Security" icon={Fingerprint} value="SECURITY" />
+                  <CategoryMenuItem title="Backup & Recovery" icon={Database} value="BACKUP" />
+                  {process.env.EXPO_PUBLIC_ENABLE_DEV_OPTIONS === 'true' && (
+                    <CategoryMenuItem title="Developer Options" icon={Wrench} value="DEVELOPER" />
+                  )}
+                </View>
+
+                <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]} onPress={() => { setIsSettingsOpen(false); logout(); }}>
+                  <LogOut color={theme.danger} size={22} style={{ marginRight: 10 }} />
+                  <Text style={{ color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }}>Lock App</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {activeCategory === 'APPEARANCE' && renderAppearance()}
+                {activeCategory === 'FINANCIAL' && renderFinancial()}
+                {activeCategory === 'SECURITY' && renderSecurity()}
+                {activeCategory === 'BACKUP' && renderBackup()}
+                {activeCategory === 'DEVELOPER' && process.env.EXPO_PUBLIC_ENABLE_DEV_OPTIONS === 'true' && renderDeveloper()}
+              </>
+            )}
+          </ScrollView>
+        </View>
       </SafeAreaView>
 
       {/* DASHBOARD GRAPHS MODAL (FLOATING) */}

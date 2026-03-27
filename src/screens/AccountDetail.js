@@ -110,15 +110,13 @@ export default function AccountDetail() {
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
 
-  const displayCategories = useMemo(() => categories?.filter(c => c.isSystem !== 1) || [], [categories]);
-
   const loadData = useCallback(async () => {
     if (!activeUser) return;
     setRefreshing(true);
     const [accs, recurs, cats, exps, buds] = await Promise.all([
       getAccounts(activeUser.id),
       getRecurringPayments(activeUser.id),
-      getCategories(activeUser.id, ['EXPENSE', 'INCOME']),
+      getCategories(activeUser.id, 'ALL'),
       getExpectedExpenses(activeUser.id),
       getBudgets(activeUser.id)
     ]);
@@ -399,13 +397,13 @@ export default function AccountDetail() {
       <AddEditAccountModal
         visible={showAddForm} editingId={editingId} accountData={selectedItem}
         openSection={{ ...config, key: sectionKey }} accounts={accounts} activeUser={activeUser}
-        expenseCategories={displayCategories}
+        expenseCategories={categories}
         onClose={() => setShowAddForm(false)} onSuccess={loadData}
       />
 
       <AddRecurringModal
         visible={showRecurForm} accounts={accounts} activeUser={activeUser}
-        expenseCategories={displayCategories}
+        expenseCategories={categories}
         initialData={selectedRecurring}
         onClose={() => { setShowRecurForm(false); setSelectedRecurring(null); }}
         onSuccess={loadData}
@@ -455,7 +453,7 @@ export default function AccountDetail() {
       <AddBudgetModal
         visible={showBudgetModal}
         activeUser={activeUser}
-        categories={displayCategories}
+        categories={categories}
         initialData={selectedBudget}
         onClose={() => { setShowBudgetModal(false); setSelectedBudget(null); }}
         onSuccess={loadData}

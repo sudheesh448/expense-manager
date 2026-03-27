@@ -43,8 +43,6 @@ export default function EmiDetails() {
     const [selectedEmi, setSelectedEmi] = useState(null);
     const [settleAccountId, setSettleAccountId] = useState(null);
     const [accounts, setAccounts] = useState([]);
-    const [categories, setCategories] = useState([]);
-    const [settleCategoryId, setSettleCategoryId] = useState(null);
     const [finedMonths, setFinedMonths] = useState(new Set());
     const flatListRef = React.useRef(null);
     const hasScrolledInitial = React.useRef(false);
@@ -68,13 +66,6 @@ export default function EmiDetails() {
             console.error('Error loading fines for EMI', e);
         }
 
-        // Fetch categories
-        try {
-            const cats = await getCategories(activeUser.id, 'EXPENSE');
-            setCategories(cats.filter(c => c.isSystem !== 1));
-        } catch (e) {
-            console.error('Error loading categories', e);
-        }
     };
 
     useFocusEffect(React.useCallback(() => { 
@@ -129,7 +120,6 @@ export default function EmiDetails() {
         setSelectedEmi(item);
         const bank = accounts.find(a => a.type === 'BANK');
         setSettleAccountId(bank?.id || null);
-        setSettleCategoryId(null); // Reset or use a default if needed
         setShowSettleModal(true);
     };
 

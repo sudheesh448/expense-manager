@@ -276,11 +276,11 @@ export const initDatabase = async () => {
       await database.runAsync("UPDATE credit_cards SET type = 'CREDIT_CARD' WHERE type IS NULL;");
       await database.runAsync("UPDATE emis SET type = 'EMI' WHERE type IS NULL;");
       await database.runAsync("UPDATE loans SET type = 'LOAN' WHERE type IS NULL;");
-      
+
       await database.runAsync("UPDATE investments SET type = 'INVESTMENT' WHERE type IS NULL;");
       // Since Loans/Investments can have multiple types, we only set if null and they have unique characteristics (or rely on existing 'type' column if it was there)
       // Actually, specialized 'type' was already part of those tables mostly.
-      
+
       // 13. Retroactively update historical SIP transaction types
       await database.runAsync("UPDATE transactions SET type = 'SIP_PAY' WHERE type = 'EXPENSE' AND (note LIKE 'SIP %' OR note LIKE 'Paid Expected: SIP:%' OR note LIKE 'SIP Payment:%');");
 
@@ -386,7 +386,7 @@ export const initDatabase = async () => {
       await addColumn('emis', 'closedAt', 'TEXT');
 
       // Borrowed & Lended migrations
-      for(const t of ['borrowed', 'lended']) {
+      for (const t of ['borrowed', 'lended']) {
         await addColumn(t, 'categoryId', 'TEXT');
         await addColumn(t, 'linkedAccountId', 'TEXT');
         await addColumn(t, 'loanFinePaid', 'REAL', 0);

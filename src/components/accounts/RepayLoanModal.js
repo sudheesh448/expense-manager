@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { deleteRecurringByAccountId, saveTransaction, updateAccount, updateRecurringPayment } from '../../services/storage';
-import { getLoanStats } from '../../utils/loanUtils';
-import { differenceInMonths } from '../../utils/dateUtils';
 import { getCurrencySymbol } from '../../utils/currencyUtils';
+import { differenceInMonths } from '../../utils/dateUtils';
+import { getLoanStats } from '../../utils/loanUtils';
 
 
 export default function RepayLoanModal({ visible, item, accounts, activeUser, onClose, onSuccess }) {

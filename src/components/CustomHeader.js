@@ -10,7 +10,8 @@ const CustomHeader = ({
   showProfile = false,
   onProfilePress,
   theme,
-  fs
+  fs,
+  containerStyle
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -21,7 +22,8 @@ const CustomHeader = ({
         backgroundColor: theme.surface,
         borderBottomColor: theme.border,
         paddingTop: insets.top + (insets.top > 0 ? 4 : 12)
-      }
+      },
+      containerStyle
     ]}>
       <View style={styles.headerLeft}>
         {showProfile && (
@@ -34,7 +36,17 @@ const CustomHeader = ({
         )}
         {leftComponent}
         {centerComponent ? centerComponent : (
-          <Text style={[styles.headerTitle, { color: theme.text, fontSize: fs(24) }]} numberOfLines={1}>
+          <Text 
+            style={[
+              styles.headerTitle, 
+              { 
+                color: theme.text, 
+                fontSize: fs(24),
+                marginLeft: (showProfile || leftComponent) ? 12 : 0
+              }
+            ]} 
+            numberOfLines={1}
+          >
             {title}
           </Text>
         )}
@@ -76,8 +88,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontWeight: '800',
-    letterSpacing: -0.6,
-    marginLeft: 12
+    letterSpacing: -0.6
   },
   profileBtn: {
     width: 40,

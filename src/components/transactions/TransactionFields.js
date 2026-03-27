@@ -90,7 +90,7 @@ export const AccountCategoryFields = ({
             showTabs={type === 'EXPENSE' || type === 'TRANSFER'}
             containerStyle={{ marginBottom: 0 }}
             options={accounts.map(a => ({ 
-              label: getAccountLabel(a, accounts, getCurrencySymbol(activeUser?.currency)), 
+              label: getAccountLabel(a, getCurrencySymbol(activeUser?.currency)), 
               value: a.id,
               accountType: a.type
             }))}
@@ -193,7 +193,7 @@ export const TransferDetails = ({ theme, type, accountId, toAccountId, setToAcco
             options={accounts
               .filter(a => a.id !== accountId)
               .map(a => ({ 
-                label: getAccountLabel(a, accounts, getCurrencySymbol(activeUser?.currency)), 
+                label: getAccountLabel(a, getCurrencySymbol(activeUser?.currency)), 
                 value: a.id,
                 accountType: a.type
               }))
