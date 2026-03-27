@@ -302,17 +302,17 @@ export default function SettingsScreen() {
   const renderAppearance = () => (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Moon color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Dark Mode</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Dark Mode</Text>
         </View>
         <Switch value={isDarkMode} onValueChange={(val) => toggleTheme(val ? 'dark' : 'light')} />
       </View>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Type color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Text Size</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Text Size</Text>
         </View>
         <CustomDropdown
           containerStyle={{ marginBottom: 0, minWidth: 120 }}
@@ -327,9 +327,9 @@ export default function SettingsScreen() {
       </View>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Globe color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Time Zone</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Time Zone</Text>
         </View>
         <CustomDropdown
           containerStyle={{ marginBottom: 0, minWidth: 160 }}
@@ -340,9 +340,9 @@ export default function SettingsScreen() {
       </View>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Banknote color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Currency</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Currency</Text>
         </View>
         <CustomDropdown
           containerStyle={{ marginBottom: 0, minWidth: 160 }}
@@ -357,9 +357,9 @@ export default function SettingsScreen() {
   const renderFinancial = () => (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <CalendarDays color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Forecast Horizon</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Forecast Horizon</Text>
         </View>
         <CustomDropdown
           containerStyle={{ marginBottom: 0, minWidth: 120 }}
@@ -375,17 +375,17 @@ export default function SettingsScreen() {
       </View>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <TouchableOpacity style={styles.row} onPress={() => setShowGraphsModal(true)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <PieChart color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Dashboard Graphs</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Dashboard Graphs</Text>
         </View>
         <Layout color={theme.textSubtle} size={20} />
       </TouchableOpacity>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <TouchableOpacity style={styles.row} onPress={() => setShowCustomGraphsModal(true)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Layout color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Custom Graphs</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Custom Graphs</Text>
         </View>
         <Plus color={theme.textSubtle} size={20} />
       </TouchableOpacity>
@@ -396,9 +396,9 @@ export default function SettingsScreen() {
     <>
       <View style={[styles.card, { backgroundColor: theme.surface }]}>
         <View style={styles.row}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
             <Fingerprint color={theme.primary} size={22} style={{ marginRight: 12 }} />
-            <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Enable Fingerprint / FaceID Login</Text>
+            <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Enable Fingerprint / FaceID Login</Text>
           </View>
           <Switch value={isBioEnabled} onValueChange={handleToggleBiometrics} />
         </View>
@@ -406,9 +406,9 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionTitle, { color: theme.textSubtle, fontSize: fs(12) }]}>DANGER ZONE</Text>
       <View style={[styles.card, { backgroundColor: theme.surface }]}>
         <TouchableOpacity style={styles.row} onPress={handleWipe}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
             <ShieldAlert color={theme.danger} size={22} style={{ marginRight: 12 }} />
-            <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]}>Erase All App Data</Text>
+            <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]} numberOfLines={2}>Erase All App Data</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -418,24 +418,24 @@ export default function SettingsScreen() {
   const renderBackup = () => (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <CalendarClock color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Automatic 24-Hour Backup</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Automatic 24-Hour Backup</Text>
         </View>
         <Switch value={autoBackupEnabled} onValueChange={handleToggleAutoBackup} />
       </View>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <TouchableOpacity style={styles.row} onPress={handleBackup}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Upload color={theme.success} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Manual Backup to File</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Manual Backup to File</Text>
         </View>
       </TouchableOpacity>
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       <TouchableOpacity style={styles.row} onPress={handleRestore}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Download color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Restore from File</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Restore from File</Text>
         </View>
       </TouchableOpacity>
     </View>
@@ -444,9 +444,9 @@ export default function SettingsScreen() {
   const renderDeveloper = () => (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Wrench color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Floating DB Inspector</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Floating DB Inspector</Text>
         </View>
         <Switch value={developerMode} onValueChange={handleToggleDeveloperMode} />
       </View>
@@ -454,9 +454,9 @@ export default function SettingsScreen() {
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
       <View style={styles.row}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Plus color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Developer Sandbox Button</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Developer Sandbox Button</Text>
         </View>
         <Switch 
           value={activeUser?.sandboxEnabled === 1} 
@@ -470,9 +470,9 @@ export default function SettingsScreen() {
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
       <TouchableOpacity style={styles.row} onPress={() => setShowDatabaseInspector(true)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Database color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Database Table Inspector</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Database Table Inspector</Text>
         </View>
         <ChevronRight color={theme.textSubtle} size={20} />
       </TouchableOpacity>
@@ -480,9 +480,9 @@ export default function SettingsScreen() {
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
       <TouchableOpacity style={styles.row} onPress={() => setShowDeveloperTools(true)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <ShieldCheck color={theme.primary} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]}>Financial Engine Test Suite</Text>
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Financial Engine Test Suite</Text>
         </View>
         <ChevronRight color={theme.textSubtle} size={20} />
       </TouchableOpacity>
@@ -490,9 +490,9 @@ export default function SettingsScreen() {
       <View style={[styles.divider, { backgroundColor: theme.border }]} />
       
       <TouchableOpacity style={styles.row} onPress={handleDevWipe}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <ShieldAlert color={theme.danger} size={22} style={{ marginRight: 12 }} />
-          <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]}>Destroy & Rebuild Database</Text>
+          <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]} numberOfLines={2}>Destroy & Rebuild Database</Text>
         </View>
         <ChevronRight color={theme.textSubtle} size={20} />
       </TouchableOpacity>
@@ -501,11 +501,11 @@ export default function SettingsScreen() {
 
   const CategoryMenuItem = ({ title, icon: Icon, value }) => (
     <TouchableOpacity style={[styles.card, { backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, marginBottom: 12 }]} onPress={() => setActiveCategory(value)}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
         <View style={{ backgroundColor: theme.primarySoft, padding: 8, borderRadius: 10, marginRight: 16 }}>
           <Icon color={theme.primary} size={24} />
         </View>
-        <Text style={[styles.rowText, { color: theme.text, fontSize: fs(17), fontWeight: '600' }]}>{title}</Text>
+        <Text style={[styles.rowText, { color: theme.text, fontSize: fs(17), fontWeight: '600' }]} numberOfLines={2}>{title}</Text>
       </View>
       <ChevronRight color={theme.textSubtle} size={22} />
     </TouchableOpacity>
@@ -554,7 +554,6 @@ export default function SettingsScreen() {
                   </View>
                   <View style={{ alignItems: 'center' }}>
                     <Text style={[styles.name, { color: theme.text, fontSize: fs(26) }]}>{activeUser?.username}</Text>
-                    <Text style={[styles.badge, { backgroundColor: theme.primary }]}>Local Device Profile</Text>
                   </View>
                 </View>
                 
