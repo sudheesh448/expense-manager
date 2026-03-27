@@ -104,6 +104,8 @@ export const initDatabase = async () => {
         closureAmount REAL,
         isDeleted INTEGER DEFAULT 0,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        closedAt TEXT,
+        note TEXT,
         categoryId TEXT,
         FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
       );`);
@@ -135,6 +137,8 @@ export const initDatabase = async () => {
         emiAmount REAL,
         processingFee REAL DEFAULT 0,
         installmentStatus TEXT DEFAULT '{}',
+        closedAt TEXT,
+        note TEXT,
         FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
       );`);
 
@@ -165,6 +169,8 @@ export const initDatabase = async () => {
         emiAmount REAL,
         processingFee REAL DEFAULT 0,
         installmentStatus TEXT DEFAULT '{}',
+        closedAt TEXT,
+        note TEXT,
         FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
       );`);
 
@@ -206,6 +212,7 @@ export const initDatabase = async () => {
         ccRemaining REAL DEFAULT 0,
         emiStartDate TEXT,
         installmentStatus TEXT DEFAULT '{}',
+        closedAt TEXT,
         categoryId TEXT,
         FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
       );`);
@@ -375,6 +382,9 @@ export const initDatabase = async () => {
       await addColumn('loans', 'disbursedPrincipal', 'REAL', 0);
       await addColumn('loans', 'principal', 'REAL', 0);
 
+      await addColumn('loans', 'closedAt', 'TEXT');
+      await addColumn('emis', 'closedAt', 'TEXT');
+
       // Borrowed & Lended migrations
       for(const t of ['borrowed', 'lended']) {
         await addColumn(t, 'categoryId', 'TEXT');
@@ -389,6 +399,8 @@ export const initDatabase = async () => {
         await addColumn(t, 'installmentStatus', 'TEXT', "'{}'");
         await addColumn(t, 'taxPercentage', 'REAL', 0);
         await addColumn(t, 'prepayments', 'TEXT', "'[]'");
+        await addColumn(t, 'closedAt', 'TEXT');
+        await addColumn(t, 'note', 'TEXT');
       }
 
       // Data Migration: Move borrowed/lended from loans to their own tables
@@ -482,21 +494,21 @@ export const getAccounts = async (arg1, arg2) => {
   if (!userId) return [];
   const sql = `
     WITH all_accounts AS (
-      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM bank_accounts
+      SELECT id, userId, type, isDeleted, createdAt, NULL as closedAt, NULL as prepayments FROM bank_accounts
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM credit_cards
+      SELECT id, userId, type, isDeleted, createdAt, NULL as closedAt, NULL as prepayments FROM credit_cards
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM loans
+      SELECT id, userId, type, isDeleted, createdAt, closedAt, prepayments FROM loans
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM investments
+      SELECT id, userId, type, isDeleted, createdAt, NULL as closedAt, NULL as prepayments FROM investments
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, NULL as prepayments FROM emis
+      SELECT id, userId, type, isDeleted, createdAt, closedAt, NULL as prepayments FROM emis
       UNION ALL
-      SELECT id, userId, 'SIP' as type, isDeleted, createdAt, NULL as prepayments FROM sip_accounts
+      SELECT id, userId, 'SIP' as type, isDeleted, createdAt, NULL as closedAt, NULL as prepayments FROM sip_accounts
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM borrowed
+      SELECT id, userId, type, isDeleted, createdAt, closedAt, prepayments FROM borrowed
       UNION ALL
-      SELECT id, userId, type, isDeleted, createdAt, prepayments FROM lended
+      SELECT id, userId, type, isDeleted, createdAt, closedAt, prepayments FROM lended
     )
     SELECT a.*, 
            COALESCE(ba.name, cc.name, l.name, i.name, e.name, s.name, b.name, ln.name) as name,

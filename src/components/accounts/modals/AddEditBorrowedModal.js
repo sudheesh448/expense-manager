@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { X, IndianRupee, Tag, Clock, CheckCircle2, Landmark } from 'lucide-react-native';
+import { X, IndianRupee, Tag, Clock, CheckCircle2, Landmark, FileText } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { generateId, getDb, saveBorrowedInfo, updateBorrowedInfo } from '../../../services/storage';
@@ -19,6 +19,7 @@ export default function AddEditBorrowedModal({
   const [acLoanPrincipal, setAcLoanPrincipal] = useState('');
   const [acDisbursementDate, setAcDisbursementDate] = useState(new Date());
   const [acTargetBankId, setAcTargetBankId] = useState('');
+  const [acNote, setAcNote] = useState('');
 
   useEffect(() => {
     if (visible && (editingId || accountData)) {
@@ -26,11 +27,13 @@ export default function AddEditBorrowedModal({
       setAcLoanPrincipal((accountData.actualDisbursedPrincipal || accountData.disbursedPrincipal || accountData.loanPrincipal || accountData.principal || '').toString());
       setAcDisbursementDate(accountData.startDate ? new Date(accountData.startDate) : (accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date()));
       setAcTargetBankId(accountData.linkedAccountId || accountData.bankAccountId || '');
+      setAcNote(accountData.note || '');
     } else if (visible && !editingId) {
       setAcName('');
       setAcLoanPrincipal('');
       setAcDisbursementDate(new Date());
       setAcTargetBankId('');
+      setAcNote('');
     }
   }, [visible, editingId, accountData]);
 
@@ -61,7 +64,8 @@ export default function AddEditBorrowedModal({
       userId: activeUser.id,
       paidMonths: accountData?.paidMonths || 0,
       loanServiceCharge: 0,
-      loanTaxPercentage: 0
+      loanTaxPercentage: 0,
+      note: acNote.trim()
     };
 
     if (editingId) {
@@ -108,7 +112,7 @@ export default function AddEditBorrowedModal({
             </View>
 
             <View>
-              <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>RECEIVE TO BANK ACCOUNT</Text>
+              <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>RECEIVE TO BANK ACCOUNT (OPTIONAL)</Text>
               <CustomDropdown
                 options={(accounts || []).filter(a => a.type === 'BANK').map(a => ({ label: a.name, value: a.id }))}
                 selectedValue={acTargetBankId}
@@ -127,6 +131,15 @@ export default function AddEditBorrowedModal({
                     date={acDisbursementDate}
                     onChange={setAcDisbursementDate}
                 />
+            </View>
+
+            <View>
+              <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>NOTE (OPTIONAL)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14), height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+                placeholder="Add details about this debt..." placeholderTextColor={theme.placeholder}
+                multiline value={acNote} onChangeText={setAcNote}
+              />
             </View>
 
             <TouchableOpacity 

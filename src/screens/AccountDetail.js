@@ -49,7 +49,6 @@ import AddRecurringModal from '../components/accounts/AddRecurringModal';
 import BudgetCard from '../components/accounts/cards/BudgetCard';
 import ConvertToEmiModal from '../components/accounts/ConvertToEmiModal';
 import ForecloseEmiModal from '../components/accounts/ForecloseEmiModal';
-import ForecloseBorrowedModal from '../components/accounts/modals/ForecloseBorrowedModal';
 import PausePickerModal from '../components/accounts/PausePickerModal';
 import RepayLoanModal from '../components/accounts/RepayLoanModal';
 import RepayBorrowedModal from '../components/accounts/modals/RepayBorrowedModal';
@@ -77,7 +76,7 @@ export default function AccountDetail() {
   const { sectionKey, showClosed } = route.params || {};
   const config = SECTION_CONFIG[sectionKey] || { label: 'Details', color: theme.primary };
   const pageTitle = showClosed 
-    ? (sectionKey === 'EMI' ? 'Closed EMIs' : 'Closed Loans') 
+    ? (sectionKey === 'EMI' ? 'Closed EMIs' : (sectionKey === 'BORROWED' ? 'Closed Borrowed' : (sectionKey === 'LENDED' ? 'Closed Lended' : 'Closed Loans'))) 
     : config.label;
 
   const [accounts, setAccounts] = useState([]);
@@ -99,7 +98,6 @@ export default function AccountDetail() {
   const [showLoanForecloseModal, setShowLoanForecloseModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showRepayBorrowedModal, setShowRepayBorrowedModal] = useState(false);
-  const [showForecloseBorrowedModal, setShowForecloseBorrowedModal] = useState(false);
 
   // State for focused items
   const [editingId, setEditingId] = useState(null);
@@ -342,9 +340,7 @@ export default function AccountDetail() {
               onPauseMonth={(r) => { setSelectedItem(r); setShowPausePicker(true); }}
               onForeclose={(i) => {
                 setSelectedItem(i);
-                if (i.type === 'BORROWED') {
-                  setShowForecloseBorrowedModal(true);
-                } else if (['LOAN', 'LENDED'].includes(i.type)) {
+                if (['LOAN', 'LENDED'].includes(i.type)) {
                   setShowLoanForecloseModal(true);
                 } else {
                   setShowForecloseModal(true);
@@ -454,12 +450,6 @@ export default function AccountDetail() {
         visible={showLoanForecloseModal} item={selectedItem} accounts={accounts}
         activeUser={activeUser}
         onClose={() => setShowLoanForecloseModal(false)} onSuccess={loadData}
-      />
-
-      <ForecloseBorrowedModal
-        visible={showForecloseBorrowedModal} item={selectedItem} accounts={accounts}
-        activeUser={activeUser}
-        onClose={() => setShowForecloseBorrowedModal(false)} onSuccess={loadData}
       />
 
       <AddBudgetModal

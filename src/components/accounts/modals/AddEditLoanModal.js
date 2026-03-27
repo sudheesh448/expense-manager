@@ -24,7 +24,7 @@ export default function AddEditLoanModal({
   const [acDisbursementDate, setAcDisbursementDate] = useState(new Date());
   const [acEmiStartDate, setAcEmiStartDate] = useState(new Date());
   const [acServiceCharge, setAcServiceCharge] = useState('');
-  const [acTaxPercentage, setAcTaxPercentage] = useState('');
+  const [acTaxPercentage, setAcTaxPercentage] = useState('0');
   const [acTargetBankId, setAcTargetBankId] = useState('');
 
   useEffect(() => {
@@ -37,8 +37,8 @@ export default function AddEditLoanModal({
       setAcDisbursementDate(accountData.startDate ? new Date(accountData.startDate) : (accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date()));
       setAcEmiStartDate(accountData.emiStartDate ? new Date(accountData.emiStartDate) : new Date());
       setAcServiceCharge((accountData.processingFee || accountData.loanServiceCharge || '').toString());
-      setAcTaxPercentage((accountData.loanTaxPercentage || '').toString());
-      setAcTargetBankId('');
+      setAcTaxPercentage((accountData.loanTaxPercentage || '0').toString());
+      setAcTargetBankId(accountData.linkedAccountId || accountData.bankAccountId || '');
     } else if (visible && !editingId) {
       setAcName('');
       setAcBalance('');
@@ -49,7 +49,7 @@ export default function AddEditLoanModal({
       setAcDisbursementDate(new Date());
       setAcEmiStartDate(new Date());
       setAcServiceCharge('');
-      setAcTaxPercentage('');
+      setAcTaxPercentage('0');
       setAcTargetBankId('');
     }
   }, [visible, editingId, accountData]);
@@ -72,7 +72,7 @@ export default function AddEditLoanModal({
     const data = {
       name: acName.trim(),
       type,
-      disbursedPrincipal: editingId && accountData ? (accountData.disbursedPrincipal || accountData.actualDisbursedPrincipal || parseFloat(acLoanPrincipal) || 0) : (parseFloat(acLoanPrincipal) || 0),
+      disbursedPrincipal: parseFloat(acLoanPrincipal) || 0,
       interestRate: parseFloat(acInterestRate) || 0,
       tenure: parseInt(acTenure, 10) || 0,
       startDate: acDisbursementDate.toISOString(),
@@ -86,7 +86,7 @@ export default function AddEditLoanModal({
       loanTaxPercentage: parseFloat(acTaxPercentage) || 0,
       loanFinePercentage: 0,
       loanProcessingFee: parseFloat(acServiceCharge) || 0,
-      bankAccountId: !editingId ? acTargetBankId : (accountData?.linkedAccountId || accountData?.bankAccountId || null),
+      bankAccountId: acTargetBankId,
       userId: activeUser.id,
       status: 'ACTIVE',
       principal: editingId && accountData ? accountData.principal : (parseFloat(acLoanPrincipal) || 0),
@@ -267,7 +267,6 @@ export default function AddEditLoanModal({
                 />
               </View>
 
-              {!editingId && (
                 <View style={{ marginTop: 12 }}>
                   <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Disburse To Bank Account</Text>
                   <CustomDropdown
@@ -278,7 +277,6 @@ export default function AddEditLoanModal({
                     icon={IndianRupee}
                   />
                 </View>
-              )}
             </FormSection>
 
             <FormSection title="Duration & Schedule" icon={Clock} theme={theme} fs={fs}>

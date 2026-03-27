@@ -71,15 +71,16 @@ export default function MonthlyInsights({ userId, monthKey, label, dateObj, isAc
       const ccExpActual = monthTx.filter(t => t.type === 'CC_EXPENSE').reduce((s, t) => s + (t.amount || 0), 0);
       const emiActual = monthTx.filter(t => t.type === 'EMI_PAYMENT').reduce((s, t) => s + (t.amount || 0), 0);
       const ccPayActual = monthTx.filter(t => t.type === 'CC_PAY').reduce((s, t) => s + (t.amount || 0), 0);
-      const incomeActual = monthTx.filter(t => t.type === 'INCOME').reduce((s, t) => s + (t.amount || 0), 0);
+      const incomeActual = monthTx.filter(t => t.type === 'INCOME' || t.type === 'loan income' || t.type === 'BORROWED').reduce((s, t) => s + (t.amount || 0), 0);
       const sipActual = monthTx.filter(t => t.type === 'SIP_PAY').reduce((s, t) => s + (t.amount || 0), 0);
+      const lendedActual = monthTx.filter(t => t.type === 'lended').reduce((s, t) => s + (t.amount || 0), 0);
 
       const bankAccIds = accounts.filter(a => a.type === 'BANK').map(a => a.id);
       const transfersIn = monthTx.filter(t => (t.type === 'TRANSFER' || t.type === 'PAYMENT' || t.type === 'CC_PAY') && bankAccIds.includes(t.toAccountId)).reduce((s, t) => s + (t.amount || 0), 0);
       const transfersOut = monthTx.filter(t => (t.type === 'TRANSFER' || t.type === 'PAYMENT' || t.type === 'CC_PAY') && bankAccIds.includes(t.accountId) && !bankAccIds.includes(t.toAccountId)).reduce((s, t) => s + (t.amount || 0), 0);
 
       const totalIncome = incomeActual + transfersIn;
-      const totalOutflow = expActual + emiActual + ccPayActual + transfersOut;
+      const totalOutflow = expActual + emiActual + ccPayActual + transfersOut + lendedActual;
 
       let aggCCDue = 0;
       let aggCCUsage = 0;
@@ -97,7 +98,7 @@ export default function MonthlyInsights({ userId, monthKey, label, dateObj, isAc
           income: totalIncome,
           outflow: totalOutflow,
           sip: sipActual,
-          consumption: expActual + ccExpActual + emiActual,
+          consumption: expActual + ccExpActual + emiActual + lendedActual,
           ccBilled: aggCCDue,
           ccUnbilled: aggCCUsage,
           ccLimit: aggCCLimit

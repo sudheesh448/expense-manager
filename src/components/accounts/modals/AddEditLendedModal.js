@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { X, IndianRupee, Tag, Clock, CheckCircle2 } from 'lucide-react-native';
+import { X, User, IndianRupee, Tag, Clock, CheckCircle2, FileText } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { generateId, getDb, saveLendedInfo, updateLendedInfo } from '../../../services/storage';
@@ -17,73 +17,49 @@ export default function AddEditLendedModal({
 
   const [acName, setAcName] = useState('');
   const [acLoanPrincipal, setAcLoanPrincipal] = useState('');
-  const [acInterestRate, setAcInterestRate] = useState('');
-  const [acTenure, setAcTenure] = useState('');
-  const [acLoanType, setAcLoanType] = useState('ONE_TIME');
   const [acDisbursementDate, setAcDisbursementDate] = useState(new Date());
-  const [acEmiStartDate, setAcEmiStartDate] = useState(new Date());
-  const [acServiceCharge, setAcServiceCharge] = useState('');
-  const [acTaxPercentage, setAcTaxPercentage] = useState('');
   const [acTargetBankId, setAcTargetBankId] = useState('');
+  const [acNote, setAcNote] = useState('');
 
   useEffect(() => {
     if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
-      setAcLoanPrincipal((accountData.actualDisbursedPrincipal || accountData.disbursedPrincipal || accountData.loanPrincipal || accountData.productPrice || '').toString());
-      setAcInterestRate((accountData.interestRate || accountData.loanInterestRate || '').toString());
-      setAcTenure((accountData.tenure || accountData.loanTenure || '').toString());
-      setAcLoanType(accountData.loanType || 'ONE_TIME');
-      setAcDisbursementDate(accountData.startDate ? new Date(accountData.startDate) : (accountData.loanStartDate ? new Date(accountData.loanStartDate) : new Date()));
-      setAcEmiStartDate(accountData.emiStartDate ? new Date(accountData.emiStartDate) : new Date());
-      setAcServiceCharge((accountData.processingFee || accountData.loanServiceCharge || '').toString());
-      setAcTaxPercentage((accountData.loanTaxPercentage || '').toString());
-      setAcTargetBankId('');
+      setAcLoanPrincipal((accountData.principal || accountData.disbursedPrincipal || '').toString());
+      setAcDisbursementDate(accountData.startDate ? new Date(accountData.startDate) : new Date());
+      setAcNote(accountData.note || '');
+      setAcTargetBankId(accountData.linkedAccountId || accountData.bankAccountId || '');
     } else if (visible && !editingId) {
       setAcName('');
       setAcLoanPrincipal('');
-      setAcInterestRate('');
-      setAcTenure('');
-      setAcLoanType('ONE_TIME');
       setAcDisbursementDate(new Date());
-      setAcEmiStartDate(new Date());
-      setAcServiceCharge('');
-      setAcTaxPercentage('');
+      setAcNote('');
       setAcTargetBankId('');
     }
   }, [visible, editingId, accountData]);
 
   const handleSave = async () => {
     if (!acName.trim()) {
-      Alert.alert("Required Field", "Please enter a name.");
+      Alert.alert("Required Field", "Please enter borrower name.");
       return;
     }
     if (!acLoanPrincipal || parseFloat(acLoanPrincipal) <= 0) {
-      Alert.alert("Required Field", "Please enter the principal amount.");
-      return;
-    }
-    if (!acTenure || parseInt(acTenure, 10) <= 0) {
-      Alert.alert("Required Field", "Tenure must be greater than 0.");
+      Alert.alert("Required Field", "Please enter the amount lent.");
       return;
     }
 
     const data = {
       name: acName.trim(),
       type: 'LENDED',
-      disbursedPrincipal: editingId && accountData ? (accountData.disbursedPrincipal || accountData.actualDisbursedPrincipal || parseFloat(acLoanPrincipal) || 0) : (parseFloat(acLoanPrincipal) || 0),
-      interestRate: parseFloat(acInterestRate) || 0,
-      tenure: parseInt(acTenure, 10) || 0,
+      principal: parseFloat(acLoanPrincipal) || 0,
+      disbursedPrincipal: parseFloat(acLoanPrincipal) || 0,
       startDate: acDisbursementDate.toISOString(),
-      loanPrincipal: parseFloat(acLoanPrincipal) || 0,
-      loanInterestRate: parseFloat(acInterestRate) || 0,
-      loanTenure: parseInt(acTenure, 10) || 0,
-      loanType: acLoanType,
       loanStartDate: acDisbursementDate.toISOString(),
-      emiStartDate: acLoanType === 'EMI' ? acEmiStartDate.toISOString() : null,
-      loanServiceCharge: parseFloat(acServiceCharge) || 0,
-      loanTaxPercentage: parseFloat(acTaxPercentage) || 0,
+      loanType: 'ONE_TIME',
+      interestRate: 0,
+      tenure: 1, // Simplified for one-time
       bankAccountId: !editingId ? acTargetBankId : (accountData?.linkedAccountId || accountData?.bankAccountId || null),
+      note: acNote.trim(),
       userId: activeUser.id,
-      principal: editingId && accountData ? accountData.principal : (parseFloat(acLoanPrincipal) || 0),
       paidMonths: accountData?.paidMonths || 0
     };
 
@@ -97,86 +73,7 @@ export default function AddEditLendedModal({
     onClose();
   };
 
-  const renderSummary = () => {
-    if (!(acLoanPrincipal && acTenure)) return null;
-
-    const P = parseFloat(acLoanPrincipal) || 0;
-    const R = parseFloat(acInterestRate) || 0;
-    const n = parseInt(acTenure, 10) || 0;
-    const SC = parseFloat(acServiceCharge) || 0;
-    const TX = (parseFloat(acTaxPercentage) || 0) / 100;
-    const feeWithTax = SC * (1 + TX);
-    
-    let emi = 0;
-    const r = R / 1200;
-    if (acLoanType === 'EMI') {
-      if (r > 0 && n > 0) {
-        emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-      } else if (n > 0) {
-        emi = P / n;
-      }
-    }
-
-    const totalInterest = acLoanType === 'EMI' ? ((emi * n) - P) : (P * (R / 100) * (n / 12));
-    const totalTax = totalInterest * (parseFloat(acTaxPercentage) / 100);
-    const totalReceipt = P + totalInterest + totalTax;
-    const deductionFromBank = P + SC;
-
-    const currencySymbol = getCurrencySymbol(activeUser?.currency);
-
-    return (
-      <View style={[styles.summaryCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <CheckCircle2 size={18} color={theme.primary} style={{ marginRight: 8 }} />
-          <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800', letterSpacing: 0.5 }}>
-            {acLoanType === 'EMI' ? 'LENDED EMI PROJECTION' : 'ONE-TIME LENDED PROJECTION'}
-          </Text>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Principal Amount</Text>
-          <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '700' }}>{currencySymbol}{P.toLocaleString()}</Text>
-        </View>
-
-        {SC > 0 && (
-          <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Processing Fee Paid</Text>
-            <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '700' }}>{currencySymbol}{SC.toLocaleString()}</Text>
-          </View>
-        )}
-
-        <View style={[styles.summaryRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: theme.border + '50', borderStyle: 'dashed' }]}>
-          <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '800' }}>Total Deducted from Bank</Text>
-          <Text style={{ color: theme.error || '#ef4444', fontSize: fs(13), fontWeight: '800' }}>{currencySymbol}{deductionFromBank.toLocaleString()}</Text>
-        </View>
-
-        <View style={[styles.summaryDivider, { backgroundColor: theme.primary + '20' }]} />
-
-        {acLoanType === 'EMI' ? (
-          <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Monthly Receipt</Text>
-            <Text style={{ color: theme.success || '#22c55e', fontSize: fs(14), fontWeight: '800' }}>{currencySymbol}{emi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
-          </View>
-        ) : (
-          <View style={styles.summaryRow}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(12), fontWeight: '600' }}>Total Interest Expected ({R}%)</Text>
-            <Text style={{ color: theme.text, fontSize: fs(12), fontWeight: '700' }}>{currencySymbol}{totalInterest.toLocaleString()}</Text>
-          </View>
-        )}
-
-        <View style={styles.summaryRow}>
-          <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>Total Receipts</Text>
-          <Text style={{ color: theme.success || '#22c55e', fontSize: fs(16), fontWeight: '900' }}>{currencySymbol}{totalReceipt.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
-        </View>
-
-        {parseFloat(acTaxPercentage) > 0 && (
-          <View style={[styles.summaryRow, { marginTop: 4 }]}>
-            <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontStyle: 'italic' }}>* Includes {currencySymbol}{totalTax.toLocaleString(undefined, { maximumFractionDigits: 0 })} estimated total tax on interest</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
+  const currencySymbol = getCurrencySymbol(activeUser?.currency);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -193,127 +90,71 @@ export default function AddEditLendedModal({
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
           <View style={{ gap: 20 }}>
-            <FormSection title="Account Setup" icon={Tag} theme={theme} fs={fs}>
+            <FormSection title="Account Setup" icon={User} theme={theme} fs={fs}>
               <View style={{ marginBottom: 16 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Borrower/Description</Text>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Borrower Name</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                  placeholder="e.g. Loan to Friend" placeholderTextColor={theme.placeholder}
+                  placeholder="e.g. John Doe" placeholderTextColor={theme.placeholder}
                   value={acName} onChangeText={setAcName}
                 />
               </View>
 
               <View style={{ marginBottom: 16 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Receipt Type</Text>
-                <View style={{ flexDirection: 'row', backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border, padding: 4 }}>
-                  <TouchableOpacity 
-                    style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 }, acLoanType === 'EMI' && { backgroundColor: theme.primary }]}
-                    onPress={() => setAcLoanType('EMI')}
-                  >
-                    <Text style={[{ fontSize: fs(13), fontWeight: '700' }, acLoanType === 'EMI' ? { color: 'white' } : { color: theme.textSubtle }]}>EMI Based</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 }, acLoanType === 'ONE_TIME' && { backgroundColor: theme.primary }]}
-                    onPress={() => setAcLoanType('ONE_TIME')}
-                  >
-                    <Text style={[{ fontSize: fs(13), fontWeight: '700' }, acLoanType === 'ONE_TIME' ? { color: 'white' } : { color: theme.textSubtle }]}>One-time Receipt</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </FormSection>
-
-            <FormSection title="Financial Details" icon={IndianRupee} theme={theme} fs={fs}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Principal Amount</Text>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Amount Lent</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: theme.text, fontSize: fs(16), marginRight: 8, fontWeight: 'bold' }}>{currencySymbol}</Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
+                    style={[styles.input, { flex: 1, backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
                     placeholder="0" placeholderTextColor={theme.placeholder}
                     keyboardType="numeric" value={acLoanPrincipal} onChangeText={setAcLoanPrincipal}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Interest Rate (%)</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                    placeholder="0" placeholderTextColor={theme.placeholder}
-                    keyboardType="numeric" value={acInterestRate} onChangeText={setAcInterestRate}
-                  />
-                </View>
-              </View>
-
-              <View style={{ marginTop: 12 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Processing Fee Paid</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                  placeholder="0" placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric" value={acServiceCharge} onChangeText={setAcServiceCharge}
-                />
-              </View>
-
-              <View style={{ marginTop: 12 }}>
-                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Tax Percentage (%) on Interest</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                  placeholder="0" placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric" value={acTaxPercentage} onChangeText={setAcTaxPercentage}
-                />
-              </View>
-
-              {!editingId && (
-                <View style={{ marginTop: 12 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Deduct From Bank Account</Text>
-                  <CustomDropdown
-                    options={(accounts || []).filter(a => a.type === 'BANK').map(a => ({ label: a.name, value: a.id }))}
-                    selectedValue={acTargetBankId}
-                    onSelect={setAcTargetBankId}
-                    placeholder="Select Bank (Optional)..."
-                    icon={IndianRupee}
-                  />
-                </View>
-              )}
-            </FormSection>
-
-            <FormSection title="Duration & Schedule" icon={Clock} theme={theme} fs={fs}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Duration (Months)</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                    placeholder="0" placeholderTextColor={theme.placeholder}
-                    keyboardType="numeric" value={acTenure} onChangeText={setAcTenure}
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <DatePicker
-                    label="Lent Date"
-                    date={acDisbursementDate}
-                    onChange={setAcDisbursementDate}
-                  />
-                </View>
-                {acLoanType === 'EMI' && (
-                  <View style={{ flex: 1 }}>
-                    <DatePicker
-                      label="First Receipt Date"
-                      date={acEmiStartDate}
-                      onChange={setAcEmiStartDate}
-                    />
-                  </View>
-                )}
               </View>
             </FormSection>
 
-            {renderSummary()}
+            <FormSection title="Transaction Details" icon={Clock} theme={theme} fs={fs}>
+              <View style={{ marginBottom: 16 }}>
+                <DatePicker
+                  label="Lent Date"
+                  date={acDisbursementDate}
+                  onChange={setAcDisbursementDate}
+                />
+              </View>
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Deduct From Account</Text>
+                <CustomDropdown
+                  options={(accounts || []).filter(a => a.type === 'BANK').map(a => ({ label: a.name, value: a.id }))}
+                  selectedValue={acTargetBankId}
+                  onSelect={setAcTargetBankId}
+                  placeholder="Select Bank/Wallet..."
+                  icon={IndianRupee}
+                />
+                <Text style={{ color: theme.textSubtle, fontSize: fs(10), marginTop: 4, fontStyle: 'italic' }}>
+                  * This amount will be recorded as a cash outflow from the selected account.
+                </Text>
+              </View>
+            </FormSection>
+
+            <FormSection title="Additional Info" icon={FileText} theme={theme} fs={fs}>
+               <View style={{ marginBottom: 16 }}>
+                <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Description/Note</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14), height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+                  placeholder="Add details about this loan..." placeholderTextColor={theme.placeholder}
+                  multiline value={acNote} onChangeText={setAcNote}
+                />
+              </View>
+            </FormSection>
 
             <TouchableOpacity 
-              style={[styles.saveBtn, { backgroundColor: openSection?.color || theme.primary }]} 
+              style={[styles.saveBtn, { backgroundColor: openSection?.color || theme.primary, marginTop: 20 }]} 
               onPress={handleSave}
             >
+              <CheckCircle2 size={20} color="white" style={{ marginRight: 8 }} />
               <Text style={[styles.saveBtnText, { fontSize: fs(16) }]}>
-                {editingId ? 'Update Lended' : 'Add Lended'}
+                {editingId ? 'Update Record' : 'Save Lending Record'}
               </Text>
             </TouchableOpacity>
           </View>

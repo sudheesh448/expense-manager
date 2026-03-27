@@ -82,6 +82,11 @@ const LoanAccountCard = ({ item, theme, fs, onDetails, onCalendar, onForeclose, 
               </View>
             )}
           </View>
+          {item.note && (
+            <Text style={{ color: theme.textSubtle, fontSize: fs(10), marginTop: 2, fontStyle: 'italic' }} numberOfLines={1}>
+              {item.note}
+            </Text>
+          )}
         </View>
 
         <View style={{ alignItems: 'flex-end' }}>

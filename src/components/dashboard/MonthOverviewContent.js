@@ -67,15 +67,17 @@ export default function MonthOverviewContent({
       // 2. Summary & Recent (Transactions)
       const monthTx = await getTransactionsByMonth(userId, monthKey);
 
-      const income = monthTx.filter(t => t.type === 'INCOME').reduce((s, t) => s + (t.amount || 0), 0);
+      const income = monthTx.filter(t => t.type === 'INCOME' || t.type === 'loan income' || t.type === 'BORROWED').reduce((s, t) => s + (t.amount || 0), 0);
       const expActual = monthTx.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + (t.amount || 0), 0);
       const ccExpActual = monthTx.filter(t => t.type === 'CC_EXPENSE').reduce((s, t) => s + (t.amount || 0), 0);
       const emiActual = monthTx.filter(t => t.type === 'EMI_PAYMENT').reduce((s, t) => s + (t.amount || 0), 0);
       const ccPayActual = monthTx.filter(t => t.type === 'CC_PAY').reduce((s, t) => s + (t.amount || 0), 0);
       const sipActual = monthTx.filter(t => t.type === 'SIP_PAY').reduce((s, t) => s + (t.amount || 0), 0);
+      const debtRepayActual = monthTx.filter(t => ['BORROWED_REPAY', 'REPAY_BORROWED', 'REPAY_LOAN', 'LOAN_REPAYMENT', 'LOAN_PRINCIPAL_PAYMENT', 'LOAN_FORECLOSURE'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
+      const lendedActual = monthTx.filter(t => t.type === 'lended').reduce((s, t) => s + (t.amount || 0), 0);
 
       const totalExpense = expActual + ccExpActual + emiActual;
-      const cashOutflow = expActual + ccPayActual + emiActual + sipActual;
+      const cashOutflow = expActual + ccPayActual + emiActual + sipActual + debtRepayActual + lendedActual;
 
       let aggCCDue = 0;
       let aggCCUsage = 0;
@@ -96,7 +98,7 @@ export default function MonthOverviewContent({
       const bankAccs = accs.filter(a => a.type === 'BANK');
       for (const bank of bankAccs) {
         const bankTx = monthTx.filter(t => t.accountId === bank.id || t.toAccountId === bank.id);
-        const bankIncome = bankTx.filter(t => (t.type === 'INCOME' && t.accountId === bank.id) || (t.toAccountId === bank.id)).reduce((s, t) => s + (t.amount || 0), 0);
+        const bankIncome = bankTx.filter(t => (t.type === 'INCOME' && t.accountId === bank.id) || (t.toAccountId === bank.id) || (t.type === 'BORROWED' && t.accountId === bank.id)).reduce((s, t) => s + (t.amount || 0), 0);
         const bankOutflow = bankTx.filter(t => (t.accountId === bank.id && t.type !== 'INCOME' && t.toAccountId !== bank.id)).reduce((s, t) => s + (t.amount || 0), 0);
         bankStatus.push({ id: bank.id, name: bank.name, income: bankIncome, outflow: bankOutflow, transactions: bankTx });
       }
@@ -114,14 +116,14 @@ export default function MonthOverviewContent({
         income, expenses: totalExpense, expActual, ccExpActual, emiActual,
         outflow: cashOutflow, ccUsage: aggCCUsage, totalCCUsage: aggCCDue,
         sipActual,
-        savings: (income - (cashOutflow - sipActual)), // Realized Savings = Income - Consumption
+        savings: (income - (cashOutflow - sipActual - debtRepayActual)), // Realized Savings = Income - Consumption
         forecastedIncome: forecastedInc,
         forecastedExpense: totalExpense + pendingExpense,
         forecastedOutflow: forecastedOut,
         forecastedSIP: forecastedSipTotal,
         forecastedSavings: forecastedInc - (forecastedOut - forecastedSipTotal) // Forecasted Savings = Total Income - Total Consumption
       });
-      setConsumptionTxs(monthTx.filter(t => ['EXPENSE', 'CC_EXPENSE', 'EMI_PAYMENT'].includes(t.type)));
+      setConsumptionTxs(monthTx.filter(t => ['EXPENSE', 'CC_EXPENSE', 'EMI_PAYMENT', 'BORROWED_REPAY', 'REPAY_BORROWED', 'REPAY_LOAN', 'lended'].includes(t.type)));
       setRecentTx(monthTx);
       setLoading(false);
     } catch (error) {
@@ -319,13 +321,13 @@ export default function MonthOverviewContent({
               const isTransfer = type === 'TRANSFER' || type === 'PAYMENT';
               const isEmi = type === 'EMI_PAYMENT' || type === 'EMI';
               const isExpanded = expandedTxId === tx.id;
-              const Icon = isIncome ? ArrowDownLeft : isTransfer ? RefreshCw : ArrowUpRight;
               const statusColor = isIncome ? theme.success : (isTransfer || isEmi) ? '#0ea5e9' : theme.text;
+              const IconComponent = isIncome ? TrendingUp : (isTransfer ? RefreshCw : TrendingDown);
               return (
                 <TouchableOpacity key={tx.id || `tx-${idx}`} style={[styles.card, { backgroundColor: theme.surface, borderColor: isExpanded ? statusColor : 'transparent', borderWidth: isExpanded ? 1 : 0 }]} onPress={() => setExpandedTxId(isExpanded ? null : tx.id)}>
                   <View style={styles.cardHeader}>
                     <View style={[styles.txIconContainer, { backgroundColor: statusColor + '15', marginRight: 12 }]}>
-                      <Icon size={18} color={statusColor} strokeWidth={2.5} />
+                      <IconComponent size={18} color={statusColor} strokeWidth={2.5} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.itemNote, { color: theme.text, fontSize: fs(15) }]} numberOfLines={isExpanded ? undefined : 1}>{tx.note || tx.category || (isEmi ? 'EMI Payment' : 'Transaction')}</Text>
@@ -389,11 +391,11 @@ export default function MonthOverviewContent({
               <TouchableOpacity onPress={() => setShowConsumptionModal(false)}><X color={theme.text} size={24} /></TouchableOpacity>
             </View>
             <ScrollView style={{ flex: 1, padding: 16 }}>
-              {['EXPENSE', 'CC_EXPENSE', 'EMI_PAYMENT'].map(type => {
+              {['EXPENSE', 'CC_EXPENSE', 'EMI_PAYMENT', 'BORROWED_REPAY', 'REPAY_BORROWED', 'REPAY_LOAN', 'lended'].map(type => {
                 const filtered = consumptionTxs.filter(t => t.type === type);
                 if (filtered.length === 0) return null;
-                const label = type === 'EXPENSE' ? 'Direct Spends' : type === 'CC_EXPENSE' ? 'CC Spends' : 'EMI Payments';
-                const color = type === 'EXPENSE' ? theme.danger : type === 'CC_EXPENSE' ? '#8b5cf6' : '#f59e0b';
+                const label = type === 'EXPENSE' ? 'Direct Spends' : type === 'CC_EXPENSE' ? 'CC Spends' : type === 'EMI_PAYMENT' ? 'EMI Payments' : type === 'lended' ? 'Money Lended' : 'Debt Repayments';
+                const color = type === 'EXPENSE' ? theme.danger : type === 'CC_EXPENSE' ? '#8b5cf6' : type === 'EMI_PAYMENT' ? '#f59e0b' : type === 'lended' ? '#10b981' : '#10b981';
                 const isExpanded = !!expandedConsSections[type];
                 const sectionTotal = filtered.reduce((s, t) => s + (t.amount || 0), 0);
                 return (

@@ -9,6 +9,7 @@ import { recordBorrowedPrepayment } from '../../../services/storage/borrowedStor
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
 import { getLoanStats } from '../../../utils/loanUtils';
 import { X, Landmark } from 'lucide-react-native';
+import CustomDropdown from '../../CustomDropdown';
 
 export default function RepayBorrowedModal({ visible, item, accounts, activeUser, onClose, onSuccess }) {
   const { theme, fs } = useTheme();
@@ -75,31 +76,17 @@ export default function RepayBorrowedModal({ visible, item, accounts, activeUser
             </View>
 
             <Text style={[styles.label, { color: theme.textSubtle, fontSize: fs(12), marginTop: 8 }]}>SELECT SOURCE ACCOUNT</Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 200 }}>
-              <View style={styles.bankGrid}>
-                {accounts.filter(a => a.type === 'BANK').map(bank => (
-                  <TouchableOpacity
-                    key={bank.id}
-                    onPress={() => setBankId(bank.id)}
-                    style={[
-                      styles.bankCard,
-                      {
-                        borderColor: bankId === bank.id ? theme.primary : theme.border + '20',
-                        backgroundColor: bankId === bank.id ? theme.primary + '10' : theme.background,
-                      }
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Landmark size={18} color={bankId === bank.id ? theme.primary : theme.textSubtle} />
-                        <View>
-                            <Text style={[styles.bankName, { color: theme.text, fontSize: fs(14) }]}>{bank.name}</Text>
-                            <Text style={{ color: theme.textSubtle, fontSize: fs(11) }}>Bal: {currencySymbol}{Math.round(bank.balance || 0).toLocaleString()}</Text>
-                        </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <CustomDropdown
+                options={accounts.filter(a => a.type === 'BANK').map(bank => ({
+                    label: bank.name,
+                    value: bank.id,
+                    subLabel: `Balance: ${currencySymbol}${Math.round(bank.balance || 0).toLocaleString()}`
+                }))}
+                selectedValue={bankId}
+                onSelect={setBankId}
+                placeholder="Select Bank Account..."
+                icon={Landmark}
+            />
 
             <TouchableOpacity
               style={[styles.confirmBtn, { backgroundColor: theme.primary }]}

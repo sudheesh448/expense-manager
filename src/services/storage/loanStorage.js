@@ -76,9 +76,10 @@ export const saveLoanInfo = async (activeUserId, loanData, currencySymbol) => {
   // Record disbursement transaction if it's the principal amount going into a bank
   if (loanData.bankAccountId) {
     const txId = generateId();
+    const incomeCategory = await ensureCategoryExists(userId, 'loan income', 'loan income', 1);
     await database.runAsync(
       'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [txId, userId, 'INCOME', loanData.principal, loanData.loanStartDate, loanData.bankAccountId, `Disbursement: ${loanData.name}`, id, category.id]
+      [txId, userId, 'loan income', loanData.principal, loanData.loanStartDate, loanData.bankAccountId, `Disbursement: ${loanData.name}`, id, incomeCategory.id]
     );
 
     // Update bank balance
@@ -95,25 +96,34 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
   const database = await getDb();
   const userId = activeUserId;
 
+  // Fetch existing to handle principal delta
+  const oldRecord = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
+  if (!oldRecord) throw new Error('Loan not found');
+
+  const oldDisbursed = Number(oldRecord.disbursedPrincipal || 0);
+  const newDisbursed = Number(loanData.disbursedPrincipal || 0);
+  const diff = newDisbursed - oldDisbursed;
+
+  // Adjust current principal by the same delta
+  const P_current = Number(oldRecord.principal || 0) + diff;
+  const P_original = newDisbursed;
+
   // Ensure system category exists
   const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
 
-  // Recalculate EMI if core parameters changed and it wasn't a manual override previously? 
-  // For now, respect the provided emiAmount if it exists.
+  // Recalculate EMI if core parameters changed
   let finalEmi = Number(loanData.emiAmount || 0);
   if (finalEmi <= 0 && loanData.loanType === 'EMI') {
-    finalEmi = calculateEmiValue(loanData.principal, loanData.loanInterestRate, loanData.loanTenure);
+    finalEmi = calculateEmiValue(P_original, loanData.loanInterestRate, loanData.loanTenure);
   }
 
   // Add tax to EMI if applicable
   const taxRate = Number(loanData.loanTaxPercentage || 0);
   if (taxRate > 0 && loanData.loanType === 'EMI') {
-    const monthlyInterest = Number(loanData.principal) * (Number(loanData.loanInterestRate) / 1200);
+    const monthlyInterest = Number(P_original) * (Number(loanData.loanInterestRate) / 1200);
     finalEmi += (monthlyInterest * (taxRate / 100));
   }
 
-  const P_original = Number(loanData.disbursedPrincipal || loanData.loanPrincipal || loanData.principal || loanData.balance || 0);
-  const P_current = Number(loanData.principal || loanData.balance || P_original || 0);
   const rate = Number(loanData.loanInterestRate || loanData.interestRate || 0);
   const tenureValue = Number(loanData.loanTenure || loanData.tenure || 0);
   const start = loanData.loanStartDate || loanData.startDate || new Date().toISOString();
@@ -145,6 +155,19 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
       accountId
     ]
   );
+
+  // If there's a delta and a bank is selected, record adjustment transaction
+  if (diff !== 0 && loanData.bankAccountId) {
+    const txId = generateId();
+    const incomeCategory = await ensureCategoryExists(userId, 'loan income', 'loan income', 1);
+    await database.runAsync(
+      'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [txId, userId, 'loan income', Math.abs(diff), new Date().toISOString(), loanData.bankAccountId, `Principal Adjustment: ${loanData.name}`, accountId, incomeCategory.id]
+    );
+    // If diff > 0, we got more money (Income flow). If diff < 0, it's a correction (Expense flow).
+    const txTypeForBalance = diff > 0 ? 'loan income' : 'EXPENSE';
+    await updateAccountBalanceSQL(database, loanData.bankAccountId, Math.abs(diff), txTypeForBalance, false);
+  }
 
   // Regenerate starting from next installment
   await syncLoanExpectedExpenses(userId, accountId);

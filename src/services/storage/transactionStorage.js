@@ -245,7 +245,10 @@ export const ensureSystemCategories = async (userId) => {
     { name: 'CC Pay', type: 'PAYMENT', isSystem: 1 },
     { name: 'CC Expense', type: 'EXPENSE', isSystem: 1 },
     { name: 'SIP', type: 'SIP_PAY', isSystem: 1 },
-    { name: 'Loan Payment', type: 'loan_pay', isSystem: 1 }
+    { name: 'Loan Payment', type: 'loan_pay', isSystem: 1 },
+    { name: 'loan income', type: 'loan income', isSystem: 1 },
+    { name: 'borrowed', type: 'BORROWED', isSystem: 1 },
+    { name: 'lended', type: 'lended', isSystem: 1 }
   ];
 
   for (const defCat of defaultCategories) {

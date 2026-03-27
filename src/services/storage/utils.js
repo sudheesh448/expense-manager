@@ -37,8 +37,12 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
     SELECT 'EMI' as type, balance FROM emis WHERE id = ?
     UNION ALL
     SELECT 'SIP' as type, balance FROM sip_accounts WHERE id = ?
+    UNION ALL
+    SELECT type, principal as balance FROM borrowed WHERE id = ?
+    UNION ALL
+    SELECT type, principal as balance FROM lended WHERE id = ?
   `;
-  const account = await database.getFirstAsync(accSql, [accountId, accountId, accountId, accountId, accountId, accountId]);
+  const account = await database.getFirstAsync(accSql, [accountId, accountId, accountId, accountId, accountId, accountId, accountId, accountId]);
   if (!account) return;
 
   let newBalance = account.balance;
@@ -53,10 +57,10 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
   } else if (!isDestination) {
     if (account.type === 'LOAN' || account.type === 'BORROWED' || account.type === 'EMI') {
       if (type === 'EXPENSE' || type === 'TRANSFER' || type === 'CC_EXPENSE') newBalance += amount;
-      else if (type === 'PAYMENT' || type === 'INCOME' || type === 'REPAY_LOAN' || type === 'REPAY_BORROWED') newBalance = Math.max(0, newBalance - amount);
+      else if (type === 'PAYMENT' || type === 'INCOME' || type === 'REPAY_LOAN' || type === 'REPAY_BORROWED' || type === 'LOAN_REPAYMENT' || type === 'LOAN_PRINCIPAL_PAYMENT' || type === 'LOAN_FORECLOSURE' || type === 'BORROWED_REPAY') newBalance = Math.max(0, newBalance - amount);
     } else {
-      if (type === 'INCOME' || type === 'TRANSFER_IN') newBalance += amount;
-      else if (type === 'EXPENSE' || type === 'TRANSFER' || type === 'PAYMENT' || type === 'REPAY_LENDED' || type === 'LEND_MONEY' || type === 'COLLECT_REPAYMENT') newBalance -= amount;
+      if (type === 'INCOME' || type === 'TRANSFER_IN' || type === 'BORROWED' || type === 'loan income') newBalance += amount;
+      else if (type === 'EXPENSE' || type === 'TRANSFER' || type === 'PAYMENT' || type === 'REPAY_LENDED' || type === 'LEND_MONEY' || type === 'COLLECT_REPAYMENT' || type === 'lended') newBalance -= amount;
     }
   } else {
     if (account.type === 'LOAN' || account.type === 'BORROWED' || account.type === 'EMI') {
@@ -77,10 +81,14 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
       break;
     }
     case 'LOAN':
-    case 'BORROWED':
-    case 'LENDED':
     case 'DEBT_REPAY':
       await database.runAsync('UPDATE loans SET principal = ? WHERE id = ?', [newBalance, accountId]);
+      break;
+    case 'BORROWED':
+      await database.runAsync('UPDATE borrowed SET principal = ? WHERE id = ?', [newBalance, accountId]);
+      break;
+    case 'LENDED':
+      await database.runAsync('UPDATE lended SET principal = ? WHERE id = ?', [newBalance, accountId]);
       break;
     case 'INVESTMENT':
     case 'LUMP_SUM':
