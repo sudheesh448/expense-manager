@@ -26,26 +26,27 @@ export const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export const updateAccountBalanceSQL = async (database, accountId, amount, type, isDestination) => {
   const accSql = `
-    SELECT 'BANK' as type, balance FROM bank_accounts WHERE id = ?
+    SELECT 'BANK' as type, balance, 0 as currentValue FROM bank_accounts WHERE id = ?
     UNION ALL
-    SELECT 'CREDIT_CARD' as type, currentUsage as balance FROM credit_cards WHERE id = ?
+    SELECT 'CREDIT_CARD' as type, currentUsage as balance, 0 as currentValue FROM credit_cards WHERE id = ?
     UNION ALL
-    SELECT type, principal as balance FROM loans WHERE id = ?
+    SELECT type, principal as balance, 0 as currentValue FROM loans WHERE id = ?
     UNION ALL
-    SELECT type, balance FROM investments WHERE id = ?
+    SELECT type, balance, investedAmount as currentValue FROM investments WHERE id = ?
     UNION ALL
-    SELECT 'EMI' as type, balance FROM emis WHERE id = ?
+    SELECT 'EMI' as type, balance, 0 as currentValue FROM emis WHERE id = ?
     UNION ALL
-    SELECT 'SIP' as type, balance FROM sip_accounts WHERE id = ?
+    SELECT 'SIP' as type, balance, currentValue FROM sip_accounts WHERE id = ?
     UNION ALL
-    SELECT type, principal as balance FROM borrowed WHERE id = ?
+    SELECT type, principal as balance, 0 as currentValue FROM borrowed WHERE id = ?
     UNION ALL
-    SELECT type, principal as balance FROM lended WHERE id = ?
+    SELECT type, principal as balance, 0 as currentValue FROM lended WHERE id = ?
   `;
   const account = await database.getFirstAsync(accSql, [accountId, accountId, accountId, accountId, accountId, accountId, accountId, accountId]);
   if (!account) return;
 
   let newBalance = account.balance;
+  let newCurrentValue = account.currentValue || 0;
   let newLastUpdate = new Date().toISOString();
 
   if (account.type === 'CREDIT_CARD') {
@@ -67,6 +68,9 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
       newBalance = Math.max(0, newBalance - amount);
     } else {
       newBalance += amount;
+      if (account.type === 'SIP') {
+        newCurrentValue += amount;
+      }
     }
   }
 
@@ -96,7 +100,7 @@ export const updateAccountBalanceSQL = async (database, accountId, amount, type,
       break;
     case 'SIP_PAY':
     case 'SIP':
-      await database.runAsync('UPDATE sip_accounts SET balance = ? WHERE id = ?', [newBalance, accountId]);
+      await database.runAsync('UPDATE sip_accounts SET balance = ?, currentValue = ? WHERE id = ?', [newBalance, newCurrentValue, accountId]);
       break;
     case 'EMI':
       await database.runAsync('UPDATE emis SET balance = ? WHERE id = ?', [newBalance, accountId]);

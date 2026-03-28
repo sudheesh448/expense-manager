@@ -912,6 +912,7 @@ export default function SettingsScreen() {
         onClose={() => setShowDeveloperTools(false)}
         theme={theme}
         fs={fs}
+        activeUser={activeUser}
       />
 
       {/* BUDGET GRAPH SETTINGS MODAL */}

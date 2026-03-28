@@ -432,7 +432,9 @@ export const initDatabase = async () => {
       await addColumn('users', 'budgetGraphSortOrder', 'TEXT', "'[]'");
       await addColumn('users', 'budgetGraphDefaultItems', 'INTEGER', 3);
       await addColumn('sip_accounts', 'balance', 'REAL', 0);
+      await addColumn('sip_accounts', 'currentValue', 'REAL', 0);
       await addColumn('investments', 'investedAmount', 'REAL', 0);
+      await addColumn('investments', 'bankAccountId', 'TEXT');
 
       // These are updates to existing columns or complex defaults, not simple column additions
       const runMigration = async (sql) => {
@@ -544,7 +546,9 @@ export const getAccounts = async (arg1, arg2) => {
             COALESCE(e.installmentStatus, l.installmentStatus, b.installmentStatus, ln.installmentStatus) as installmentStatus,
             e.tenure as tenure, e.amount as amount,
             e.closureAmount as emiClosureAmount,
-            e.linkedAccountId as linkedAccountId, e.linkedAccountId as sourceCcId,
+            e.linkedAccountId as linkedAccountIdVal,
+            COALESCE(e.linkedAccountId, s.linkedAccountId, i.bankAccountId) as linkedAccountId,
+            e.linkedAccountId as sourceCcId,
             COALESCE(cc.billingDay, s.sipDate, (SELECT d.emiDate FROM emis d WHERE d.id = a.id)) as billingDay,
             cc.dueDay,
             COALESCE(s.categoryId, i.categoryId, e.categoryId, l.categoryId, b.categoryId, ln.categoryId) as categoryId,
@@ -552,6 +556,7 @@ export const getAccounts = async (arg1, arg2) => {
             COALESCE(s.status, 'ACTIVE') as status,
             COALESCE(s.pausedMonths, '[]') as pausedMonths,
             i.investedAmount,
+            s.currentValue as sipCurrentValue,
             (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t WHERE (t.toAccountId = a.id OR t.linkedItemId = a.id) AND (t.type IN ('TRANSFER', 'PAYMENT', 'REPAY_LOAN', 'REPAY_BORROWED', 'EMI_PAYMENT', 'EMI_FINE', 'FINE', 'EXPENSE'))) as totalPaid,
             (SELECT COUNT(*) FROM transactions t WHERE (t.toAccountId = a.id OR t.linkedItemId = a.id) AND (t.type IN ('TRANSFER', 'PAYMENT', 'REPAY_LOAN', 'REPAY_BORROWED', 'EMI_PAYMENT', 'EXPENSE'))) as paymentCount,
             (SELECT combined.name 

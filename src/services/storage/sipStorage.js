@@ -7,8 +7,8 @@ export const saveSIPAccount = async (database, id, data) => {
   if (!database || !id) return;
 
   const sql = `INSERT INTO sip_accounts (
-    id, userId, name, amount, sipDate, startDate, categoryId, linkedAccountId, isClosed, status, pausedMonths, balance
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    id, userId, name, amount, sipDate, startDate, categoryId, linkedAccountId, isClosed, status, pausedMonths, balance, currentValue
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   
   await database.runAsync(sql, [
     id,
@@ -22,7 +22,8 @@ export const saveSIPAccount = async (database, id, data) => {
     data.isClosed ? 1 : 0,
     data.status || 'ACTIVE',
     JSON.stringify(data.pausedMonths || []),
-    Number(data.balance || 0)
+    Number(data.balance || 0),
+    Number(data.currentValue || 0)
   ]);
 
   // Generate Expected Expenses for the forecast period
@@ -40,7 +41,7 @@ export const updateSIPAccount = async (database, id, data) => {
   if (!old) return;
 
   const sql = `UPDATE sip_accounts SET 
-    name = ?, amount = ?, sipDate = ?, startDate = ?, categoryId = ?, isClosed = ?, status = ?, pausedMonths = ?, balance = ?
+    name = ?, amount = ?, sipDate = ?, startDate = ?, categoryId = ?, isClosed = ?, status = ?, pausedMonths = ?, balance = ?, currentValue = ?
     WHERE id = ?`;
     
   await database.runAsync(sql, [
@@ -53,6 +54,7 @@ export const updateSIPAccount = async (database, id, data) => {
     data.status || 'ACTIVE',
     JSON.stringify(data.pausedMonths || []),
     Number(data.balance || 0),
+    Number(data.currentValue || 0),
     id
   ]);
 

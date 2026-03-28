@@ -53,7 +53,9 @@ export default function AddEditInvestmentModal({
 
     const investmentId = editingId || generateId();
     const currentVal = parseFloat(acAmount) || 0;
-    const investedVal = parseFloat(acInvestedAmount) || currentVal; // Fallback to current if not provided
+    const investedVal = parseFloat(acInvestedAmount) || currentVal;
+    const oldInvestedVal = accountData?.investedAmount || 0;
+    const delta = investedVal - oldInvestedVal;
     
     const data = {
       name: acName.trim(),
@@ -61,42 +63,76 @@ export default function AddEditInvestmentModal({
       balance: currentVal, // Market Value
       investedAmount: investedVal, // Capital
       sipAmount: 0,
+      bankAccountId: acTargetBankId || null,
       userId: activeUser.id,
       status: 'ACTIVE',
       categoryId: accountData?.categoryId || null
     };
 
     const db = await getDb();
-    try {
-      if (editingId) {
-        await updateInvestmentInfo(db, editingId, data);
-      } else {
-        await saveInvestmentInfo(db, investmentId, data);
-        
-        if (acTargetBankId) {
-          // Log as transfer from bank to investment
-          const txId = generateId();
-          const now = new Date().toISOString();
+
+    const executeSave = async () => {
+      try {
+        if (editingId) {
+          await updateInvestmentInfo(db, editingId, data);
           
-          await db.runAsync(
-            'INSERT INTO transactions (id, userId, type, amount, date, accountId, toAccountId, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [txId, activeUser.id, 'TRANSFER', investedVal, now, acTargetBankId, investmentId, `Investment Funding: ${acName.trim()}`]
-          );
+          if (delta !== 0 && acTargetBankId) {
+            const txId = generateId();
+            const now = new Date().toISOString();
+            const absDelta = Math.abs(delta);
+            const isIncrease = delta > 0;
+            
+            // If increase: Bank -> Investment
+            // If decrease: Investment -> Bank
+            const fromId = isIncrease ? acTargetBankId : editingId;
+            const toId = isIncrease ? editingId : acTargetBankId;
+            const note = isIncrease ? `Investment Capital Increase: ${acName.trim()}` : `Investment Capital Withdrawal: ${acName.trim()}`;
+
+            await db.runAsync(
+              'INSERT INTO transactions (id, userId, type, amount, date, accountId, toAccountId, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [txId, activeUser.id, 'TRANSFER', absDelta, now, fromId, toId, note]
+            );
+            
+            // Update Bank balance
+            await updateAccountBalanceSQL(db, acTargetBankId, absDelta, 'TRANSFER', !isIncrease);
+            // Update Investment balance
+            await updateAccountBalanceSQL(db, editingId, absDelta, 'TRANSFER', isIncrease);
+          }
+        } else {
+          await saveInvestmentInfo(db, investmentId, data);
           
-          // Deduct from bank
-          await updateAccountBalanceSQL(db, acTargetBankId, investedVal, 'TRANSFER', false);
-          // Add to investment
-          await updateAccountBalanceSQL(db, investmentId, investedVal, 'TRANSFER', true);
-          
-          // If market value is different from invested value at start (e.g. historical entry)
-          // we don't need a separate transaction, the balance is already set in saveInvestmentInfo.
+          if (investedVal > 0 && acTargetBankId) {
+            const txId = generateId();
+            const now = new Date().toISOString();
+            
+            await db.runAsync(
+              'INSERT INTO transactions (id, userId, type, amount, date, accountId, toAccountId, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [txId, activeUser.id, 'TRANSFER', investedVal, now, acTargetBankId, investmentId, `Initial Investment Funding: ${acName.trim()}`]
+            );
+            
+            await updateAccountBalanceSQL(db, acTargetBankId, investedVal, 'TRANSFER', false);
+            await updateAccountBalanceSQL(db, investmentId, investedVal, 'TRANSFER', true);
+          }
         }
+        onSuccess();
+        onClose();
+      } catch (error) {
+        console.error('Error saving investment:', error);
+        Alert.alert("Error", "Failed to save investment account.");
       }
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error('Error saving investment:', error);
-      Alert.alert("Error", "Failed to save investment account.");
+    };
+
+    if (editingId && delta < 0 && acTargetBankId) {
+      Alert.alert(
+        "Confirm Withdrawal",
+        `You are decreasing the invested amount by ${currencySymbol}${Math.abs(delta).toLocaleString()}. This amount will be credited back to your bank account. Proceed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Yes, Proceed", onPress: executeSave }
+        ]
+      );
+    } else {
+      await executeSave();
     }
   };
 

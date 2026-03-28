@@ -10,8 +10,8 @@ const SipAccountCard = ({ item, theme, fs, onEdit, onDelete, onRefresh, onPauseM
   const { activeUser } = useAuth();
   const currency = getCurrencySymbol(activeUser?.currency);
 
-  const totalInvested = item.totalPaid || 0;
-  const currentVal = item.balance ?? totalInvested;
+  const totalInvested = item.balance || item.totalPaid || 0;
+  const currentVal = item.sipCurrentValue || item.balance || totalInvested;
   const returns = currentVal - totalInvested;
   const returnPerc = totalInvested > 0 ? (returns / totalInvested) * 100 : 0;
   

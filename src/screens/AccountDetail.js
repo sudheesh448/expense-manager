@@ -304,14 +304,25 @@ export default function AccountDetail() {
               <View style={styles.summaryStatItem}>
                 <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold', marginBottom: 4 }}>INVESTED</Text>
                 <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>
-                  {getCurrencySymbol(activeUser?.currency)}{items.reduce((sum, i) => sum + (i.investedAmount || i.totalPaid || 0), 0).toLocaleString()}
+                  {getCurrencySymbol(activeUser?.currency)}{items.reduce((sum, i) => {
+                    if (i.type === 'INVESTMENT') return sum + (i.investedAmount || i.balance || 0);
+                    if (i.type === 'SIP') return sum + (i.balance || i.totalPaid || 0);
+                    return sum + (i.totalPaid || 0);
+                  }, 0).toLocaleString()}
                 </Text>
               </View>
               
               <View style={styles.summaryStatItem}>
                   {(() => {
-                    const totalInv = items.reduce((sum, i) => sum + (i.investedAmount || i.totalPaid || 0), 0);
-                    const currentVal = items.reduce((sum, i) => sum + (i.balance ?? i.totalPaid ?? 0), 0);
+                    const totalInv = items.reduce((sum, i) => {
+                      if (i.type === 'INVESTMENT') return sum + (i.investedAmount || i.balance || 0);
+                      if (i.type === 'SIP') return sum + (i.balance || i.totalPaid || 0);
+                      return sum + (i.totalPaid || 0);
+                    }, 0);
+                    const currentVal = items.reduce((sum, i) => {
+                      if (i.type === 'SIP') return sum + (i.sipCurrentValue || i.balance || 0);
+                      return sum + (i.balance ?? i.totalPaid ?? 0);
+                    }, 0);
                     const returns = currentVal - totalInv;
                     const returnPerc = totalInv > 0 ? (returns / totalInv) * 100 : 0;
                    return (
