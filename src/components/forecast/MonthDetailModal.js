@@ -184,28 +184,28 @@ export default function MonthDetailModal({
                       ) : (
                         <TouchableOpacity 
                           onPress={() => {
-                            if (!item.isDone && !item.isBudget && !(item.linkedAccountId || (item.name && item.name.startsWith('EMI:')))) {
+                            if (!item.isDone && !item.isBudget && !(item.linkedAccountId || (item.name && (item.name.startsWith('EMI:') || item.name.startsWith('Loan EMI:'))))) {
                               setEditingId(item.id);
                               setEditAmount(String(item.amount));
                             }
                           }}
-                          disabled={!!item.isDone || !!item.isBudget || !!(item.linkedAccountId || (item.name && item.name.startsWith('EMI:')))}
+                          disabled={!!item.isDone || !!item.isBudget || !!(item.linkedAccountId || (item.name && (item.name.startsWith('EMI:') || item.name.startsWith('Loan EMI:'))))}
                         >
                           <Text style={[styles.lineVal, { color: theme.text, fontSize: fs(14), fontWeight: '600' }]}>
                             {getCurrencySymbol(activeUser?.currency)}{item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </Text>
                         </TouchableOpacity>
-                       )}
-                      {!item.isDone && !item.isBudget && (
-                        <TouchableOpacity 
-                          onPress={() => onDelete(item.id)} 
-                          style={{ marginLeft: 12, opacity: (item.linkedAccountId || (item.name && item.name.startsWith('EMI:'))) ? 0.3 : 1 }}
-                          disabled={!!(item.linkedAccountId || (item.name && item.name.startsWith('EMI:')))}
-                        >
-                          <Trash2 size={18} color={theme.danger} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                        )}
+                        {!item.isDone && !item.isBudget && (
+                          <TouchableOpacity 
+                            onPress={() => onDelete(item.id)} 
+                            style={{ marginLeft: 12, opacity: (item.linkedAccountId || (item.name && (item.name.startsWith('EMI:') || item.name.startsWith('Loan EMI:')))) ? 0.3 : 1 }}
+                            disabled={!!(item.linkedAccountId || (item.name && (item.name.startsWith('EMI:') || item.name.startsWith('Loan EMI:'))))}
+                          >
+                            <Trash2 size={18} color={theme.danger} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                   </View>
                 ))}
                 

@@ -25,7 +25,7 @@ export const saveLendedInfo = async (activeUserId, data, currencySymbol) => {
   const id = generateId();
 
   // Ensure system category exists (for received payments, it's Income)
-  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME');
+  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME', 1);
 
   let finalEmi = Number(data.emiAmount || 0);
   if (finalEmi <= 0 && data.loanType === 'EMI') {
@@ -102,7 +102,7 @@ export const updateLendedInfo = async (activeUserId, accountId, data) => {
   const P_current = Number(oldRecord.principal || 0) + diff;
   const P_original = newDisbursed;
 
-  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME');
+  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME', 1);
 
   let finalEmi = Number(data.emiAmount || 0);
   if (finalEmi <= 0 && data.loanType === 'EMI') {
@@ -172,7 +172,7 @@ export const recordLendedPrepayment = async (userId, accountId, bankAccountId, a
   if (!account) throw new Error('Account not found');
 
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME');
+  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME', 1);
 
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -202,7 +202,7 @@ export const syncLendedExpectedExpenses = async (userId, accountId) => {
   const account = await database.getFirstAsync('SELECT * FROM lended WHERE id = ?', [accountId]);
   if (!account) return;
 
-  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME');
+  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME', 1);
   const schedule = calculateAmortizationSchedule(account);
   const now = new Date();
   const currentMonthKey = format(now, 'yyyy-MM');
@@ -246,7 +246,7 @@ export const syncLendedExpectedExpenses = async (userId, accountId) => {
 
 export const forecloseLended = async (userId, accountId, bankAccountId, settlementAmount) => {
   const database = await getDb();
-  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME');
+  const category = await ensureCategoryExists(userId, 'lended_receive', 'INCOME', 1);
   const account = await database.getFirstAsync('SELECT * FROM lended WHERE id = ?', [accountId]);
 
   const txId = generateId();

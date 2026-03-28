@@ -58,7 +58,7 @@ export default function MonthOverviewContent({
         .filter(e => e.monthKey === monthKey && e.isDone === 0)
         .map(e => ({
           ...e,
-          itemType: e.type === 'SIP_PAY' ? 'SIP' : (e.linkedAccountId && e.name && e.name.startsWith('EMI:')) ? 'EMI' : 'EXPENSE'
+          itemType: e.type === 'SIP_PAY' ? 'SIP' : (e.linkedAccountId && e.name && (e.name.startsWith('EMI:') || e.name.startsWith('Loan EMI:'))) ? 'EMI' : 'EXPENSE'
         }))
         .sort((a, b) => (a.emiDate || a.anchorDay || 1) - (b.emiDate || b.anchorDay || 1));
 

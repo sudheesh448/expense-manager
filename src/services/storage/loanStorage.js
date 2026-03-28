@@ -25,7 +25,7 @@ export const saveLoanInfo = async (activeUserId, loanData, currencySymbol) => {
   const id = generateId();
 
   // Ensure system category exists
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
 
   // If no manual EMI provided, calculate it
   let finalEmi = Number(loanData.emiAmount || 0);
@@ -109,7 +109,7 @@ export const updateLoanInfo = async (activeUserId, accountId, loanData) => {
   const P_original = newDisbursed;
 
   // Ensure system category exists
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
 
   // Recalculate EMI if core parameters changed
   let finalEmi = Number(loanData.emiAmount || 0);
@@ -189,7 +189,7 @@ export const recordPrincipalPrepayment = async (userId, accountId, bankAccountId
 
   // 2. Add Prepayment Transaction
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
 
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -227,7 +227,7 @@ export const syncLoanExpectedExpenses = async (userId, accountId) => {
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
   if (!account) return;
 
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
   const schedule = calculateAmortizationSchedule(account);
   const now = new Date();
   const currentMonthKey = format(now, 'yyyy-MM');
@@ -243,29 +243,27 @@ export const syncLoanExpectedExpenses = async (userId, accountId) => {
 
   if (account.loanType === 'EMI') {
     for (const row of futureRows) {
-      await saveExpectedExpense(database, {
-        userId,
+      await saveExpectedExpense(userId, {
         name: `Loan EMI: ${account.name}`,
         amount: row.totalOutflow,
         type: 'EXPENSE',
         monthKey: row.monthKey,
         date: row.monthDate.toISOString(),
         linkedAccountId: accountId,
-        categoryId: category.id
+        categoryId: category
       });
     }
   } else if (account.loanType === 'ONE_TIME') {
     const finalRow = schedule[schedule.length - 1];
     if (finalRow && !finalRow.isCompleted) {
-      await saveExpectedExpense(database, {
-        userId,
+      await saveExpectedExpense(userId, {
         name: `Loan Settlement: ${account.name}`,
         amount: finalRow.totalOutflow,
         type: 'EXPENSE',
         monthKey: finalRow.monthKey,
         date: finalRow.monthDate.toISOString(),
         linkedAccountId: accountId,
-        categoryId: category.id
+        categoryId: category
       });
     }
   }
@@ -273,7 +271,7 @@ export const syncLoanExpectedExpenses = async (userId, accountId) => {
 
 export const recordLoanFine = async (userId, accountId, bankAccountId, amount, monthKey) => {
   const database = await getDb();
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
 
   const txId = generateId();
@@ -289,7 +287,7 @@ export const recordLoanFine = async (userId, accountId, bankAccountId, amount, m
 
 export const forecloseLoan = async (userId, accountId, bankAccountId, settlementAmount) => {
   const database = await getDb();
-  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'loan_pay', 'EXPENSE', 1);
   const account = await database.getFirstAsync('SELECT * FROM loans WHERE id = ?', [accountId]);
 
   const txId = generateId();

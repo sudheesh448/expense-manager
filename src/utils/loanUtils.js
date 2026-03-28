@@ -234,10 +234,24 @@ export const getLoanStats = (item) => {
   if (!principal_original || !tenureValue) {
     return { 
       isLoan: true, 
-      remainingTotal: P_current, 
-      closeTodayAmount: P_current, 
+      isEmi: loanType === 'EMI',
+      loanType,
+      principal: P_current, 
+      principal_original: principal_original || P_current, 
+      rate: item.loanInterestRate || 0,
       emi: 0, 
+      totalRepayable: item.isClosed === 1 ? 0 : P_current,
+      originalTotalPayable: principal_original || P_current,
+      remainingTotal: item.isClosed === 1 ? 0 : P_current,
+      closeTodayAmount: item.isClosed === 1 ? 0 : P_current,
       totalInterest: 0, 
+      extraCost: 0,
+      tenureValue: tenureValue || 0,
+      paymentCount: parseInt(item.paidMonths || 0, 10),
+      totalPaid: 0,
+      remainingMonths: 0,
+      finePaid: Number(item.loanFinePaid || 0),
+      extraPercentage: 0,
       fineAmount: 0 
     };
   }

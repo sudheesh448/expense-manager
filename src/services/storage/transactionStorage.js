@@ -271,9 +271,12 @@ export const ensureSystemCategories = async (userId) => {
     { name: 'CC Expense', type: 'EXPENSE', isSystem: 1 },
     { name: 'SIP', type: 'SIP_PAY', isSystem: 1 },
     { name: 'Loan Payment', type: 'loan_pay', isSystem: 1 },
+    { name: 'loan_pay', type: 'EXPENSE', isSystem: 1 },
     { name: 'loan income', type: 'loan income', isSystem: 1 },
-    { name: 'borrowed', type: 'BORROWED', isSystem: 1 },
-    { name: 'lended', type: 'lended', isSystem: 1 }
+    { name: 'borrowed', type: 'INCOME', isSystem: 1 },
+    { name: 'borrowed repay', type: 'EXPENSE', isSystem: 1 },
+    { name: 'lended', type: 'lended', isSystem: 1 },
+    { name: 'lended_receive', type: 'INCOME', isSystem: 1 }
   ];
 
   for (const defCat of defaultCategories) {
@@ -298,8 +301,19 @@ export const saveExpectedExpense = async (userId, data) => {
     const database = await getDb();
     const id = generateId();
     const amount = Number(data.amount || 0);
-    const sql = `INSERT INTO expected_expenses (id, userId, monthKey, name, amount, isDone, categoryId, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-    await database.runAsync(sql, [id, userId, data.monthKey, data.name, amount, data.isDone ? 1 : 0, data.categoryId || null, data.type || 'EXPENSE']);
+    const sql = `INSERT INTO expected_expenses (id, userId, monthKey, name, amount, isDone, categoryId, type, linkedAccountId, anchorDay) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    await database.runAsync(sql, [
+      id, 
+      userId, 
+      data.monthKey, 
+      data.name, 
+      amount, 
+      data.isDone ? 1 : 0, 
+      data.categoryId || null, 
+      data.type || 'EXPENSE',
+      data.linkedAccountId || null,
+      data.anchorDay || null
+    ]);
     return { id, userId, ...data, amount, isDone: data.isDone ? 1 : 0, type: data.type || 'EXPENSE' };
   } catch (error) {
     throw error;

@@ -314,13 +314,28 @@ const DeveloperTools = ({ visible, onClose, theme, fs, activeUser }) => {
         status: 'ACTIVE'
       }, currency);
       addLog('✅ Created Loan: Personal Loan (5L, 36m)');
-
+ 
+      // 3b. One-Time Loan
+      await saveLoanInfo(userId, {
+        name: 'Hand Loan (Sample)',
+        type: 'LOAN',
+        loanType: 'ONE_TIME',
+        principal: 50000,
+        loanInterestRate: 0,
+        loanTenure: 1,
+        loanStartDate: new Date().toISOString(),
+        bankAccountId: bankId,
+        status: 'ACTIVE'
+      }, currency);
+      addLog('✅ Created One-Time Loan: Hand Loan (50,000)');
+ 
       // 4. Borrowed
       await saveBorrowedInfo(userId, {
         name: 'Borrowed from Friend (Sample)',
         type: 'BORROWED',
         principal: 10000,
-        date: new Date().toISOString(),
+        loanStartDate: new Date().toISOString(),
+        tenure: 1,
         bankAccountId: bankId,
         status: 'ACTIVE'
       }, currency);
@@ -330,8 +345,9 @@ const DeveloperTools = ({ visible, onClose, theme, fs, activeUser }) => {
       await saveLendedInfo(userId, {
         name: 'Lended to Colleague (Sample)',
         type: 'LENDED',
-        principal: 5000,
-        date: new Date().toISOString(),
+        principal: 50000,
+        loanStartDate: new Date().toISOString(),
+        tenure: 1,
         bankAccountId: bankId,
         status: 'ACTIVE'
       }, currency);

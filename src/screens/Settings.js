@@ -82,7 +82,7 @@ export default function SettingsScreen() {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) {
-        Alert.alert('Unsupported', 'Your device does not have fingerprint/face hardware enabled.');
+        Alert.alert('Unsupported', 'Your device does not have biometric hardware enabled.');
         return;
       }
     }
@@ -483,18 +483,18 @@ export default function SettingsScreen() {
 
   const renderSecurity = () => (
     <>
-      <View style={[styles.card, { backgroundColor: theme.surface }]}>
-        <View style={styles.row}>
+      <View style={[styles.card, { backgroundColor: theme.surface, paddingVertical: 8 }]}>
+        <View style={[styles.row, { paddingVertical: 8 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
             <Fingerprint color={theme.primary} size={22} style={{ marginRight: 12 }} />
-            <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Enable Fingerprint / FaceID Login</Text>
+            <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Enable Biometric Login</Text>
           </View>
           <Switch value={isBioEnabled} onValueChange={handleToggleBiometrics} />
         </View>
       </View>
       <Text style={[styles.sectionTitle, { color: theme.textSubtle, fontSize: fs(12) }]}>DANGER ZONE</Text>
-      <View style={[styles.card, { backgroundColor: theme.surface }]}>
-        <TouchableOpacity style={styles.row} onPress={handleWipe}>
+      <View style={[styles.card, { backgroundColor: theme.surface, paddingVertical: 8 }]}>
+        <TouchableOpacity style={[styles.row, { paddingVertical: 8 }]} onPress={handleWipe}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
             <ShieldAlert color={theme.danger} size={22} style={{ marginRight: 12 }} />
             <Text style={[styles.rowText, { color: theme.danger, fontWeight: 'bold', fontSize: fs(16) }]} numberOfLines={2}>Erase All App Data</Text>

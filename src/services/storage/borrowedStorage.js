@@ -103,7 +103,7 @@ export const updateBorrowedInfo = async (activeUserId, accountId, data) => {
   const P_current = Number(oldRecord.principal || 0) + diff;
   const P_original = newDisbursed;
 
-  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE', 1);
 
   let finalEmi = Number(data.emiAmount || 0);
   if (finalEmi <= 0 && data.loanType === 'EMI') {
@@ -173,7 +173,7 @@ export const recordBorrowedPrepayment = async (userId, accountId, bankAccountId,
   if (!account) throw new Error('Account not found');
 
   const txId = generateId();
-  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE', 1);
 
   await database.runAsync(
     'INSERT INTO transactions (id, userId, type, amount, date, accountId, note, linkedItemId, categoryId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -204,7 +204,7 @@ export const syncBorrowedExpectedExpenses = async (userId, accountId) => {
   const account = await database.getFirstAsync('SELECT * FROM borrowed WHERE id = ?', [accountId]);
   if (!account) return;
 
-  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE', 1);
   const schedule = calculateAmortizationSchedule(account);
   const now = new Date();
   const currentMonthKey = format(now, 'yyyy-MM');
@@ -248,7 +248,7 @@ export const syncBorrowedExpectedExpenses = async (userId, accountId) => {
 
 export const forecloseBorrowed = async (userId, accountId, bankAccountId, settlementAmount) => {
   const database = await getDb();
-  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE');
+  const category = await ensureCategoryExists(userId, 'borrowed repay', 'EXPENSE', 1);
   const account = await database.getFirstAsync('SELECT * FROM borrowed WHERE id = ?', [accountId]);
 
   const txId = generateId();
