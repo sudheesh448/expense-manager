@@ -31,3 +31,10 @@ eas login
 eas build:configure
 
 eas build -p android --profile preview
+
+
+
+npx expo prebuild
+
+
+cd android && ./gradlew assembleRelease

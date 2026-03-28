@@ -9,7 +9,7 @@ import { saveCategory } from '../../services/storage';
 import CustomHeader from '../CustomHeader';
 import { useTheme } from '../../context/ThemeContext';
 
-export default function CategorySelectionModal({ visible, categories, selectedIds, onClose, onSelect }) {
+export default function CategorySelectionModal({ visible, userId, categories, selectedIds, onClose, onSelect }) {
   const { theme, fs } = useTheme();
   const insets = useSafeAreaInsets();
   const [tempIds, setTempIds] = useState([]);
@@ -28,7 +28,7 @@ export default function CategorySelectionModal({ visible, categories, selectedId
     try {
         // We implicitly assume EXPENSE for budgets, though categorized budgets can be both.
         // For simplicity, we create as EXPENSE.
-        const cat = await saveCategory(null, newCategoryName.trim(), 'EXPENSE');
+        const cat = await saveCategory(userId, newCategoryName.trim(), 'EXPENSE');
         setLocalCategories(prev => [...prev, cat]);
         setTempIds(prev => [...prev, cat.id]);
         setNewCategoryName('');

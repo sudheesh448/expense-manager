@@ -1,4 +1,5 @@
 import { getDb } from './core';
+import { getTransactionsByMonth } from './transactionStorage';
 
 /**
  * Get all active budgets for a user
@@ -45,4 +46,23 @@ export const deleteBudget = async (id) => {
     [id]
   );
   return true;
+};
+
+/**
+ * Get budget utilization for a specific month
+ */
+export const getBudgetUtilization = async (userId, monthKey) => {
+  const budgets = await getBudgets(userId);
+  const transactions = await getTransactionsByMonth(userId, monthKey);
+
+  return budgets.map(budget => {
+    const utilized = transactions
+      .filter(t => budget.categoryIds.includes(t.categoryId))
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    return {
+      ...budget,
+      utilized
+    };
+  });
 };

@@ -386,3 +386,65 @@ export const forecloseEmi = async (userId, emiAccountId, fromAccountId, foreclos
     throw err;
   }
 };
+
+/**
+ * Ensures that expected_expenses exist for the full forecast horizon for all active EMIs.
+ */
+export const stabilizeEmiExpenses = async (arg1, arg2) => {
+  let database = arg1;
+  let userId = arg2;
+  if (typeof arg1 === 'string' || !arg1) {
+    userId = arg1;
+    database = await getDb();
+  }
+  if (!userId) return;
+
+  const user = await database.getFirstAsync('SELECT forecastMonths FROM users WHERE id = ?', [userId]);
+  const durationMonths = user?.forecastMonths || 6;
+  
+  const emis = await database.getAllAsync('SELECT * FROM emis WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL) AND isClosed = 0', [userId]);
+  const today = new Date();
+  const horizon = new Date(today.getFullYear(), today.getMonth() + durationMonths + 1, 0);
+
+  for (const emi of emis) {
+    const start = new Date(emi.emiStartDate || new Date().toISOString());
+    const n = Number(emi.tenure || 1);
+    const installmentStatus = JSON.parse(emi.installmentStatus || '{}');
+    const emiPayCatId = await ensureCategoryExists(userId, 'EMI Payment', 'EMI Payment', 1);
+
+    for (let i = 0; i < n; i++) {
+      const forecastDate = new Date(start);
+      forecastDate.setMonth(start.getMonth() + i);
+      
+      // Stop if beyond forecast horizon
+      if (forecastDate > horizon) break;
+
+      const monthKey = `${forecastDate.getFullYear()}-${String(forecastDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Skip if already marked as paid/foreclosed in installmentStatus
+      if (installmentStatus[monthKey] === 'paid' || installmentStatus[monthKey] === 'foreclosed') continue;
+
+      const exists = await database.getFirstAsync(
+        'SELECT id, isDone FROM expected_expenses WHERE linkedAccountId = ? AND monthKey = ? AND (isDeleted = 0 OR isDeleted IS NULL)',
+        [emi.id, monthKey]
+      );
+
+      if (!exists) {
+        let itemAmount = Number(emi.amount);
+        let itemName = `EMI: ${emi.name} (${i + 1}/${n})`;
+
+        // Re-add processing fee if this is the first installment (i=0) and it hasn't been paid
+        if (i === 0 && Number(emi.processingFee) > 0) {
+          itemAmount += Number(emi.processingFee);
+          itemName += ` + Fee`;
+        }
+
+        const expectedId = generateId();
+        await database.runAsync(
+          'INSERT INTO expected_expenses (id, userId, monthKey, name, amount, categoryId, type, linkedAccountId, anchorDay) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [expectedId, userId, monthKey, itemName, itemAmount, emi.categoryId || emiPayCatId, 'EXPENSE', emi.id, emi.emiDate]
+        );
+      }
+    }
+  }
+};

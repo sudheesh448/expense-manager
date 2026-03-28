@@ -7,8 +7,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateSandboxEnabled, updateUserTimezone, updateUserCurrency } from '../services/storage';
-import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote, Landmark, CreditCard, TrendingUp, BarChart2, Building2, HandCoins, Users, Clock, RefreshCw } from 'lucide-react-native';
+import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCategories, getForecastDuration, getAutoBackupSettings, importData, updateUserBiometrics, updateForecastDuration, updateAutoBackupSettings, exportData, resetDatabase, updateDeveloperMode, updateSandboxEnabled, updateUserTimezone, updateUserCurrency, getBudgets, updateCategory, deleteCategory, saveCategory } from '../services/storage';
+import { User, Fingerprint, LogOut, ShieldAlert, Moon, Type, CalendarDays, Database, Upload, Download, CalendarClock, PieChart, Layout, X, Plus, Trash2, Edit2, CheckCircle2, Circle, ChevronUp, ChevronDown, ChevronRight, ArrowLeft, Wrench, Globe, Banknote, Landmark, CreditCard, TrendingUp, BarChart2, Building2, HandCoins, Users, Clock, RefreshCw, Tag } from 'lucide-react-native';
 import { TIMEZONE_OPTIONS, findNearestTimezone } from '../utils/dateUtils';
 import { CURRENCY_OPTIONS } from '../utils/currencyUtils';
 import CustomDropdown from '../components/CustomDropdown';
@@ -19,7 +19,7 @@ import { ShieldCheck } from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const { activeUser, updateUser, logout } = useAuth();
-  const { theme, fs, themeMode, toggleTheme, fontScale, setFontScalePreference, accountVisibility, setAccountVisibilityPreference, dashboardGraphs, setDashboardGraphsPreference, customGraphs, setCustomGraphsPreference, graphOrder, setGraphOrderPreference, isSettingsOpen, setIsSettingsOpen } = useTheme();
+  const { theme, fs, themeMode, toggleTheme, fontScale, setFontScalePreference, accountVisibility, setAccountVisibilityPreference, dashboardGraphs, setDashboardGraphsPreference, customGraphs, setCustomGraphsPreference, graphOrder, setGraphOrderPreference, isSettingsOpen, setIsSettingsOpen, budgetGraphSettings, setBudgetGraphSettingsPreference } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [activeCategory, setActiveCategory] = useState(null); // 'APPEARANCE' | 'FINANCIAL' | 'SECURITY' | 'BACKUP'
@@ -35,6 +35,8 @@ export default function SettingsScreen() {
   const [showAccountVisibilityModal, setShowAccountVisibilityModal] = useState(false);
   const [showCustomGraphsModal, setShowCustomGraphsModal] = useState(false);
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  const [showBudgetSettingsModal, setShowBudgetSettingsModal] = useState(false);
+  const [budgetList, setBudgetList] = useState([]);
   const [categories, setCategories] = useState([]);
   const [newGraphName, setNewGraphName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -42,6 +44,9 @@ export default function SettingsScreen() {
   const [newGraphIsScrollable, setNewGraphIsScrollable] = useState(true);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [showManageCategoriesModal, setShowManageCategoriesModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null); // { id, name, type }
+  const [catType, setCatType] = useState('EXPENSE');
   
   const [showWipePinModal, setShowWipePinModal] = useState(false);
   const [showDatabaseInspector, setShowDatabaseInspector] = useState(false);
@@ -174,14 +179,15 @@ export default function SettingsScreen() {
 
   const getOrderedGraphs = () => {
     const defaultKeys = [
-      { id: 'monthlyInsight', name: 'Monthly Insight', alwaysOn: true },
       { id: 'savingsOverview', name: 'Savings Overview' },
+      { id: 'accountTypeOverview', name: 'Account Portfolio' },
+      { id: 'monthlyInsight', name: 'Monthly Insight', alwaysOn: true },
       { id: 'ccDues', name: 'Credit Card Dues' },
       { id: 'ccTotal', name: 'Credit Card Total' }
     ];
     
     const fullDefaultOrder = [
-      'monthlyInsight', 'savingsOverview', 'ccDues', 'ccTotal',
+      'savingsOverview', 'accountTypeOverview', 'monthlyInsight', 'ccDues', 'ccTotal',
       ...(customGraphs || []).map(g => g.id)
     ];
 
@@ -254,12 +260,16 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleAddCategory = async () => {
+  const handleSaveCategory = async () => {
     if (!newCatName.trim()) return;
     try {
-      const { saveCategory } = await import('../services/storage/transactionStorage');
-      await saveCategory(activeUser.id, newCatName.trim(), 'EXPENSE');
+      if (editingCategory) {
+        await updateCategory(activeUser.id, editingCategory.id, newCatName.trim(), catType);
+      } else {
+        await saveCategory(activeUser.id, newCatName.trim(), catType);
+      }
       setNewCatName('');
+      setEditingCategory(null);
       setShowAddCategoryModal(false);
       // Reload categories
       const cats = await getCategories(activeUser.id, 'ALL');
@@ -267,6 +277,25 @@ export default function SettingsScreen() {
     } catch (e) {
       Alert.alert('Error', 'Category already exists or failed to save.');
     }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    Alert.alert(
+      'Delete Category',
+      'Are you sure you want to delete this category? Past transactions will still show their original category name, but you won\'t be able to select it for new ones.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteCategory(activeUser.id, id);
+            const cats = await getCategories(activeUser.id, 'ALL');
+            setCategories(cats.sort((a, b) => (a.isSystem || 0) - (b.isSystem || 0)));
+          } catch (e) {
+            Alert.alert('Error', 'Failed to delete category.');
+          }
+        }}
+      ]
+    );
   };
 
   const handleSaveCustomGraph = async () => {
@@ -413,6 +442,39 @@ export default function SettingsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
           <Layout color={theme.primary} size={22} style={{ marginRight: 12 }} />
           <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Account Visibility</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <TouchableOpacity style={styles.row} onPress={async () => {
+        const blist = await getBudgets(activeUser.id);
+        const sortOrder = budgetGraphSettings.sortOrder || [];
+        const sorted = [...blist].sort((a, b) => {
+           const idxA = sortOrder.indexOf(a.id);
+           const idxB = sortOrder.indexOf(b.id);
+           if (idxA === -1 && idxB === -1) return 0;
+           if (idxA === -1) return 1;
+           if (idxB === -1) return -1;
+           return idxA - idxB;
+        });
+        setBudgetList(sorted);
+        setShowBudgetSettingsModal(true);
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
+          <Layout color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Budget Graph Settings</Text>
+        </View>
+        <ChevronRight color={theme.textSubtle} size={20} />
+      </TouchableOpacity>
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <TouchableOpacity style={styles.row} onPress={() => {
+        const sorted = (categories || []).filter(c => !c.isSystem);
+        setCategories(sorted);
+        setShowManageCategoriesModal(true);
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
+          <Tag color={theme.primary} size={22} style={{ marginRight: 12 }} />
+          <Text style={[styles.rowText, { color: theme.text, fontSize: fs(16) }]} numberOfLines={2}>Manage Categories</Text>
         </View>
         <ChevronRight color={theme.textSubtle} size={20} />
       </TouchableOpacity>
@@ -807,7 +869,7 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity 
               style={[styles.closeBtn, { backgroundColor: theme.primary }]} 
-              onPress={handleAddCategory}
+              onPress={handleSaveCategory}
             >
               <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Create Category</Text>
             </TouchableOpacity>
@@ -851,6 +913,189 @@ export default function SettingsScreen() {
         theme={theme}
         fs={fs}
       />
+
+      {/* BUDGET GRAPH SETTINGS MODAL */}
+      <Modal visible={showBudgetSettingsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowBudgetSettingsModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 20, paddingTop: insets.top, paddingBottom: 16 }}>
+            <Text style={{ fontWeight: 'bold', color: theme.text, fontSize: fs(18) }}>Budget Graph Settings</Text>
+            <TouchableOpacity onPress={() => setShowBudgetSettingsModal(false)}><X color={theme.textSubtle} size={24} /></TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 20 }}>
+            <View style={{ paddingVertical: 20 }}>
+              <Text style={{ color: theme.text, fontSize: fs(16), fontWeight: 'bold', marginBottom: 4 }}>Default Items Displayed</Text>
+              <Text style={{ color: theme.textSubtle, fontSize: fs(12), marginBottom: 12 }}>How many budgets to show before scrolling vertically.</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <TouchableOpacity 
+                    key={n} 
+                    onPress={() => setBudgetGraphSettingsPreference(budgetGraphSettings.sortOrder, n)}
+                    style={{ 
+                      paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1,
+                      backgroundColor: budgetGraphSettings.defaultItems === n ? theme.primary : 'transparent',
+                      borderColor: budgetGraphSettings.defaultItems === n ? theme.primary : theme.border
+                    }}
+                  >
+                    <Text style={{ color: budgetGraphSettings.defaultItems === n ? '#fff' : theme.text, fontWeight: 'bold' }}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: theme.border, marginVertical: 10 }]} />
+
+            <View style={{ paddingVertical: 10 }}>
+              <Text style={{ color: theme.text, fontSize: fs(16), fontWeight: 'bold', marginBottom: 4 }}>Manual Sorting</Text>
+              <Text style={{ color: theme.textSubtle, fontSize: fs(12), marginBottom: 16 }}>Move items to set default display order. Leave empty for utilization auto-sort.</Text>
+              
+              {budgetList.map((budget, index) => (
+                <View key={budget.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'column', marginRight: 12 }}>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          const newList = [...budgetList];
+                          const item = newList.splice(index, 1)[0];
+                          newList.splice(index - 1, 0, item);
+                          setBudgetList(newList);
+                          setBudgetGraphSettingsPreference(newList.map(b => b.id), budgetGraphSettings.defaultItems);
+                        }} 
+                        disabled={index === 0}
+                      >
+                        <ChevronUp color={index === 0 ? theme.border : theme.primary} size={24} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          const newList = [...budgetList];
+                          const item = newList.splice(index, 1)[0];
+                          newList.splice(index + 1, 0, item);
+                          setBudgetList(newList);
+                          setBudgetGraphSettingsPreference(newList.map(b => b.id), budgetGraphSettings.defaultItems);
+                        }} 
+                        disabled={index === budgetList.length - 1}
+                      >
+                        <ChevronDown color={index === budgetList.length - 1 ? theme.border : theme.primary} size={24} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ fontWeight: '500', color: theme.text, fontSize: fs(15) }}>{budget.name}</Text>
+                  </View>
+                </View>
+              ))}
+              
+              {budgetList.length > 0 && (
+                <TouchableOpacity 
+                  style={{ marginTop: 20, padding: 10, alignItems: 'center' }}
+                  onPress={() => {
+                    setBudgetGraphSettingsPreference([], budgetGraphSettings.defaultItems);
+                    Alert.alert('Reset', 'Manual sorting cleared. Use utilization auto-sort.');
+                  }}
+                >
+                  <Text style={{ color: theme.danger, fontWeight: 'bold' }}>Clear Manual Sorting</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.primary, marginBottom: 20, marginHorizontal: 20 }]} onPress={() => setShowBudgetSettingsModal(false)}>
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Close</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
+
+      {/* MANAGE CATEGORIES MODAL */}
+      <Modal visible={showManageCategoriesModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManageCategoriesModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 20, paddingTop: insets.top, paddingBottom: 16 }}>
+            <Text style={{ fontWeight: 'bold', color: theme.text, fontSize: fs(18) }}>Manage Categories</Text>
+            <TouchableOpacity onPress={() => setShowManageCategoriesModal(false)}><X color={theme.textSubtle} size={24} /></TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }}>
+            <View style={{ padding: 20 }}>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, padding: 12, borderRadius: 12, marginBottom: 20, justifyContent: 'center' }}
+                onPress={() => {
+                  setEditingCategory(null);
+                  setNewCatName('');
+                  setCatType('EXPENSE');
+                  setShowAddCategoryModal(true);
+                }}
+              >
+                <Plus color="white" size={20} style={{ marginRight: 8 }} />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Add New Category</Text>
+              </TouchableOpacity>
+
+              {categories.filter(c => !c.isSystem).map((cat) => (
+                <View key={cat.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: fs(16), fontWeight: '500' }}>{cat.name}</Text>
+                    <Text style={{ color: theme.textSubtle, fontSize: fs(12) }}>{cat.type}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <TouchableOpacity onPress={() => {
+                      setEditingCategory(cat);
+                      setNewCatName(cat.name);
+                      setCatType(cat.type);
+                      setShowAddCategoryModal(true);
+                    }}>
+                      <Edit2 color={theme.primary} size={20} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteCategory(cat.id)}>
+                      <Trash2 color={theme.danger} size={20} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.primary, marginBottom: 20, marginHorizontal: 20 }]} onPress={() => setShowManageCategoriesModal(false)}>
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: fs(16) }}>Close</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ADD/EDIT CATEGORY MODAL */}
+      <Modal visible={showAddCategoryModal} transparent animationType="fade" onRequestClose={() => setShowAddCategoryModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: theme.surface, borderRadius: 20, padding: 20 }}>
+            <Text style={{ color: theme.text, fontSize: fs(18), fontWeight: 'bold', marginBottom: 20 }}>{editingCategory ? 'Edit Category' : 'New Category'}</Text>
+            
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), marginBottom: 8 }}>Name</Text>
+            <TextInput 
+              style={{ backgroundColor: theme.background, color: theme.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, marginBottom: 20 }}
+              value={newCatName}
+              onChangeText={setNewCatName}
+              placeholder="e.g. Dining Out"
+              placeholderTextColor={theme.textSubtle}
+              autoFocus
+            />
+
+            <Text style={{ color: theme.textSubtle, fontSize: fs(12), marginBottom: 8 }}>Type</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+              {['EXPENSE', 'INCOME'].map(type => (
+                <TouchableOpacity 
+                   key={type}
+                   onPress={() => setCatType(type)}
+                   style={{ 
+                     flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center',
+                     backgroundColor: catType === type ? theme.primary : 'transparent',
+                     borderColor: catType === type ? theme.primary : theme.border
+                   }}
+                >
+                  <Text style={{ color: catType === type ? 'white' : theme.text, fontWeight: 'bold' }}>{type}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity style={{ flex: 1, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }} onPress={() => setShowAddCategoryModal(false)}>
+                <Text style={{ color: theme.textSubtle, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, padding: 14, borderRadius: 10, backgroundColor: theme.primary, alignItems: 'center' }} onPress={handleSaveCategory}>
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </Modal>
   );

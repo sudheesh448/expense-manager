@@ -3,7 +3,8 @@ import {
   Archive,
   ChevronLeft,
   Plus,
-  ShieldAlert, ShieldPlus
+  ShieldAlert, ShieldPlus,
+  TrendingUp
 } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -303,16 +304,16 @@ export default function AccountDetail() {
               <View style={styles.summaryStatItem}>
                 <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold', marginBottom: 4 }}>INVESTED</Text>
                 <Text style={{ color: theme.text, fontSize: fs(14), fontWeight: '800' }}>
-                  {getCurrencySymbol(activeUser?.currency)}{items.reduce((sum, i) => sum + (i.totalPaid || 0), 0).toLocaleString()}
+                  {getCurrencySymbol(activeUser?.currency)}{items.reduce((sum, i) => sum + (i.investedAmount || i.totalPaid || 0), 0).toLocaleString()}
                 </Text>
               </View>
               
               <View style={styles.summaryStatItem}>
-                 {(() => {
-                   const totalInv = items.reduce((sum, i) => sum + (i.totalPaid || 0), 0);
-                   const currentVal = items.reduce((sum, i) => sum + (i.balance ?? i.totalPaid ?? 0), 0);
-                   const returns = currentVal - totalInv;
-                   const returnPerc = totalInv > 0 ? (returns / totalInv) * 100 : 0;
+                  {(() => {
+                    const totalInv = items.reduce((sum, i) => sum + (i.investedAmount || i.totalPaid || 0), 0);
+                    const currentVal = items.reduce((sum, i) => sum + (i.balance ?? i.totalPaid ?? 0), 0);
+                    const returns = currentVal - totalInv;
+                    const returnPerc = totalInv > 0 ? (returns / totalInv) * 100 : 0;
                    return (
                      <>
                         <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold', marginBottom: 4, textAlign: 'right' }}>OVERALL RETURNS</Text>

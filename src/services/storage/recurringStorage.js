@@ -1,9 +1,42 @@
 import { generateId, getDb, updateAccountBalanceSQL, ensureCategoryExists } from './utils';
+import { stabilizeEmiExpenses } from './emiStorage';
+import { syncAllLoanExpectedExpenses } from './loanStorage';
+import { stabilizeSIPExpenses } from './sipStorage';
 
 export const getForecastDuration = async (userId) => {
   const database = await getDb();
   const row = await database.getFirstAsync('SELECT forecastMonths FROM users WHERE id = ?', [userId || '']);
   return row?.forecastMonths || 6;
+};
+
+export const updateForecastDuration = async (userId, duration) => {
+  const database = await getDb();
+  await database.runAsync('UPDATE users SET forecastMonths = ? WHERE id = ?', [duration, userId]);
+  await regenerateAllProjections(userId);
+};
+export const regenerateAllProjections = async (userId) => {
+  if (!userId) return;
+
+  const database = await getDb();
+  
+  // Clear future unpaid linked expected expenses to ensure they are regenerated with correct metadata (e.g. categoryId)
+  const currentMonthKey = new Date().toISOString().substring(0, 7);
+  await database.runAsync(
+    'UPDATE expected_expenses SET isDeleted = 1 WHERE userId = ? AND isDone = 0 AND monthKey >= ? AND linkedAccountId IS NOT NULL',
+    [userId, currentMonthKey]
+  );
+  
+  // 1. Recurring Payments (Monthly Schedules)
+  await generateAllRecurringExpenses(userId);
+  
+  // 2. EMIs
+  await stabilizeEmiExpenses(userId);
+  
+  // 3. Loans
+  await syncAllLoanExpectedExpenses(userId);
+  
+  // 4. SIPs
+  await stabilizeSIPExpenses(database, userId);
 };
 
 export const generateRecurringExpenses = async (userId, payment, durationMonths = 6) => {

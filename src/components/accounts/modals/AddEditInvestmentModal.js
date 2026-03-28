@@ -3,7 +3,7 @@ import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } fro
 import { X, TrendingUp, Tag } from 'lucide-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
-import { generateId, getDb, saveInvestmentInfo, updateInvestmentInfo } from '../../../services/storage';
+import { generateId, getDb, saveInvestmentInfo, updateInvestmentInfo, updateAccountBalanceSQL } from '../../../services/storage';
 import { getCurrencySymbol } from '../../../utils/currencyUtils';
 import CustomHeader from '../../CustomHeader';
 import CustomDropdown from '../../CustomDropdown';
@@ -18,6 +18,7 @@ export default function AddEditInvestmentModal({
 
   const [acName, setAcName] = useState('');
   const [acAmount, setAcAmount] = useState('');
+  const [acInvestedAmount, setAcInvestedAmount] = useState('');
   const [acType, setAcType] = useState('INVESTMENT');
   const [acStartDate, setAcStartDate] = useState(new Date());
   const [acTargetBankId, setAcTargetBankId] = useState('');
@@ -25,13 +26,15 @@ export default function AddEditInvestmentModal({
   useEffect(() => {
     if (visible && (editingId || accountData)) {
       setAcName(accountData.name || '');
-      setAcAmount((accountData.amount || accountData.principal || '').toString());
+      setAcAmount((accountData.balance || '').toString());
+      setAcInvestedAmount((accountData.investedAmount || '').toString());
       setAcType(accountData.type || 'INVESTMENT');
       setAcStartDate(accountData.startDate ? new Date(accountData.startDate) : new Date());
       setAcTargetBankId(accountData.linkedAccountId || accountData.bankAccountId || '');
     } else if (visible && !editingId) {
       setAcName('');
       setAcAmount('');
+      setAcInvestedAmount('');
       setAcType(openSection?.key || 'INVESTMENT');
       setAcStartDate(new Date());
       setAcTargetBankId('');
@@ -48,26 +51,53 @@ export default function AddEditInvestmentModal({
       return;
     }
 
+    const investmentId = editingId || generateId();
+    const currentVal = parseFloat(acAmount) || 0;
+    const investedVal = parseFloat(acInvestedAmount) || currentVal; // Fallback to current if not provided
+    
     const data = {
       name: acName.trim(),
       type: acType,
-      amount: parseFloat(acAmount) || 0,
-      principal: parseFloat(acAmount) || 0,
-      startDate: acStartDate.toISOString(),
-      bankAccountId: acTargetBankId,
+      balance: currentVal, // Market Value
+      investedAmount: investedVal, // Capital
+      sipAmount: 0,
       userId: activeUser.id,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      categoryId: accountData?.categoryId || null
     };
 
     const db = await getDb();
-    if (editingId) {
-      await updateInvestmentInfo(db, editingId, data);
-    } else {
-      await saveInvestmentInfo(db, generateId(), { ...data, userId: activeUser.id });
+    try {
+      if (editingId) {
+        await updateInvestmentInfo(db, editingId, data);
+      } else {
+        await saveInvestmentInfo(db, investmentId, data);
+        
+        if (acTargetBankId) {
+          // Log as transfer from bank to investment
+          const txId = generateId();
+          const now = new Date().toISOString();
+          
+          await db.runAsync(
+            'INSERT INTO transactions (id, userId, type, amount, date, accountId, toAccountId, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [txId, activeUser.id, 'TRANSFER', investedVal, now, acTargetBankId, investmentId, `Investment Funding: ${acName.trim()}`]
+          );
+          
+          // Deduct from bank
+          await updateAccountBalanceSQL(db, acTargetBankId, investedVal, 'TRANSFER', false);
+          // Add to investment
+          await updateAccountBalanceSQL(db, investmentId, investedVal, 'TRANSFER', true);
+          
+          // If market value is different from invested value at start (e.g. historical entry)
+          // we don't need a separate transaction, the balance is already set in saveInvestmentInfo.
+        }
+      }
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error('Error saving investment:', error);
+      Alert.alert("Error", "Failed to save investment account.");
     }
-
-    onSuccess();
-    onClose();
   };
 
   const currencySymbol = getCurrencySymbol(activeUser?.currency);
@@ -90,22 +120,33 @@ export default function AddEditInvestmentModal({
 
           <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
             <View style={{ gap: 20 }}>
-              <FormSection title="Account Setup" icon={Tag} theme={theme} fs={fs}>
+              <FormSection title="Portfolio Values" icon={Tag} theme={theme} fs={fs}>
                 <View style={{ marginBottom: 16 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Name</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Investment Name</Text>
                   <TextInput
                     style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                    placeholder="e.g. PPF or Cash" placeholderTextColor={theme.placeholder}
+                    placeholder="e.g. Reliance Stocks, PPF" placeholderTextColor={theme.placeholder}
                     value={acName} onChangeText={setAcName}
                   />
                 </View>
-                <View>
-                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Current Value</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
-                    placeholder="0.00" placeholderTextColor={theme.placeholder}
-                    keyboardType="numeric" value={acAmount} onChangeText={setAcAmount}
-                  />
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Invested Amount</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
+                      placeholder="0.00" placeholderTextColor={theme.placeholder}
+                      keyboardType="numeric" value={acInvestedAmount} onChangeText={setAcInvestedAmount}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(12) }]}>Current Value</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(14) }]}
+                      placeholder="0.00" placeholderTextColor={theme.placeholder}
+                      keyboardType="numeric" value={acAmount} onChangeText={setAcAmount}
+                    />
+                  </View>
                 </View>
               </FormSection>
 

@@ -1,4 +1,3 @@
-import { generateRecurringExpenses } from './recurringStorage';
 import { generateId, getDb, updateAccountBalanceSQL, ensureCategoryExists } from './utils';
 
 export const getTransactions = async (arg1, arg2) => {
@@ -238,6 +237,29 @@ export const saveCategory = async (userId, name, type = 'EXPENSE', isSystem = 0)
   }
 };
 
+export const updateCategory = async (userId, id, newName, type) => {
+  if (!userId || !id) throw new Error("Missing ID or User ID");
+  try {
+    const database = await getDb();
+    await database.runAsync('UPDATE categories SET name = ?, type = ? WHERE id = ? AND userId = ?', [newName.trim(), type, id, userId]);
+  } catch (error) {
+    console.error('Error updating category:', error);
+    throw error;
+  }
+};
+
+export const deleteCategory = async (userId, id) => {
+  if (!userId || !id) throw new Error("Missing ID or User ID");
+  try {
+    const database = await getDb();
+    // Soft delete
+    await database.runAsync('UPDATE categories SET isDeleted = 1 WHERE id = ? AND userId = ?', [id, userId]);
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    throw error;
+  }
+};
+
 
 export const ensureSystemCategories = async (userId) => {
   if (!userId) return;
@@ -280,7 +302,17 @@ export const saveExpectedExpense = async (userId, data) => {
     await database.runAsync(sql, [id, userId, data.monthKey, data.name, amount, data.isDone ? 1 : 0, data.categoryId || null, data.type || 'EXPENSE']);
     return { id, userId, ...data, amount, isDone: data.isDone ? 1 : 0, type: data.type || 'EXPENSE' };
   } catch (error) {
-    console.error('Error saving expected expense', error);
+    throw error;
+  }
+};
+
+export const updateExpectedExpenseAmount = async (id, amount) => {
+  if (!id) return;
+  try {
+    const database = await getDb();
+    await database.runAsync('UPDATE expected_expenses SET amount = ? WHERE id = ?', [Number(amount), id]);
+  } catch (error) {
+    console.error('Error updating expected expense amount', error);
     throw error;
   }
 };
@@ -436,6 +468,7 @@ export const payExpectedExpense = async (userId, expenseId, fromAccountId, categ
       const newNextDue = new Date(base.getTime() + recurring.cycleDays * 24 * 60 * 60 * 1000);
       await database.runAsync('UPDATE recurring_payments SET nextDueDate = ? WHERE id = ?', [newNextDue.toISOString(), recurring.id]);
       await database.runAsync(`UPDATE expected_expenses SET isDeleted = 1 WHERE userId = ? AND name = ? AND isDone = 0`, [userId, recurring.name]);
+      const { generateRecurringExpenses } = await import('./recurringStorage');
       await generateRecurringExpenses(userId, { ...recurring, nextDueDate: newNextDue.toISOString() });
     }
   } catch (err) {

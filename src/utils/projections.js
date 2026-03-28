@@ -116,22 +116,29 @@ export const generateProjections = (accounts, transactions, expectedExpenses = [
         if (exp.isDone === 0) {
           slot.expectedIncome += exp.amount;
         }
-      } else if (exp.type === 'SIP_PAY') {
-        slot.investmentDetails.push(exp);
-        if (exp.isDone === 0) {
-          slot.totalInvestments += exp.amount;
-        }
       } else {
         // Enforce Deduplication: If category is in budget, it's already counted in expectedDue
-        const isBudgeted = budgetCategoryIds.has(String(exp.categoryId));
-        if (!isBudgeted) {
-          slot.expectedDetails.push(exp);
-          if (exp.isDone === 0) {
-            slot.expectedDue += exp.amount;
+        const isBudgeted = exp.categoryId && budgetCategoryIds.has(String(exp.categoryId));
+        
+        if (exp.type === 'SIP_PAY') {
+          if (isBudgeted) {
+             slot.expectedDetails.push({ ...exp, isCoveredByBudget: true });
+          } else {
+             slot.investmentDetails.push(exp);
+             if (exp.isDone === 0) {
+              slot.totalInvestments += exp.amount;
+             }
           }
         } else {
-          // If budgeted, we still show it in details but marked as "COVERED BY BUDGET"
-          slot.expectedDetails.push({ ...exp, isCoveredByBudget: true });
+          if (!isBudgeted) {
+            slot.expectedDetails.push(exp);
+            if (exp.isDone === 0) {
+              slot.expectedDue += exp.amount;
+            }
+          } else {
+            // If budgeted, we still show it in details but marked as "COVERED BY BUDGET"
+            slot.expectedDetails.push({ ...exp, isCoveredByBudget: true });
+          }
         }
       }
     }

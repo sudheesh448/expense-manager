@@ -37,9 +37,38 @@ const BaseAccountCard = ({ item, theme, fs, onEdit, onDelete, onDetails }) => {
           <Text style={[styles.cardAmount, { color: theme.success, fontSize: fs(18) }]}>
             {getCurrencySymbol(activeUser?.currency)}{(item.balance || 0).toLocaleString()}
           </Text>
-          <Text style={{ color: theme.textSubtle, fontSize: fs(10) }}>Balance</Text>
+          <Text style={{ color: theme.textSubtle, fontSize: fs(10) }}>
+            {item.type === 'INVESTMENT' ? 'Current Value' : 'Balance'}
+          </Text>
         </View>
       </View>
+
+      {item.type === 'INVESTMENT' && item.investedAmount > 0 && (
+        <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.02)', padding: 10, borderRadius: 12 }}>
+          <View>
+            <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold' }}>INVESTED</Text>
+            <Text style={{ color: theme.text, fontSize: fs(13), fontWeight: '800' }}>
+              {getCurrencySymbol(activeUser?.currency)}{item.investedAmount.toLocaleString()}
+            </Text>
+          </View>
+          
+          <View style={{ alignItems: 'flex-end' }}>
+            {(() => {
+              const returns = item.balance - item.investedAmount;
+              const returnPerc = (returns / item.investedAmount) * 100;
+              const isProfit = returns >= 0;
+              return (
+                <>
+                  <Text style={{ color: theme.textSubtle, fontSize: fs(10), fontWeight: 'bold' }}>RETURNS</Text>
+                  <Text style={{ color: isProfit ? theme.success : theme.danger, fontSize: fs(13), fontWeight: '800' }}>
+                    {isProfit ? '+' : ''}{getCurrencySymbol(activeUser?.currency)}{Math.abs(returns).toLocaleString()} ({returnPerc.toFixed(1)}%)
+                  </Text>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      )}
 
       <View style={styles.actionsBar}>
         <TouchableOpacity onPress={() => onEdit?.(item)} style={styles.actionBtn}>

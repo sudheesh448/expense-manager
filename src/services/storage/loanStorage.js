@@ -374,3 +374,17 @@ export const payLoanInstallment = async (userId, accountId, bankAccountId, amoun
 
   return true;
 };
+
+/**
+ * Utility to sync all active loans' expected expenses
+ */
+export const syncAllLoanExpectedExpenses = async (userId) => {
+  const database = await getDb();
+  const activeLoans = await database.getAllAsync(
+    'SELECT id FROM loans WHERE userId = ? AND (isDeleted = 0 OR isDeleted IS NULL) AND isClosed = 0',
+    [userId]
+  );
+  for (const loan of activeLoans) {
+    await syncLoanExpectedExpenses(userId, loan.id);
+  }
+};

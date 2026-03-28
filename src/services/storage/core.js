@@ -32,7 +32,9 @@ export const initDatabase = async () => {
         developerMode INTEGER DEFAULT 0,
         timezone TEXT DEFAULT '${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}',
         currency TEXT DEFAULT '${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}',
-        accountVisibility TEXT DEFAULT '{"BANK":true,"CREDIT_CARD":true,"INVESTMENT":true,"SIP":true,"LOAN":true,"BORROWED":true,"LENDED":true,"EMI":true,"RECURRING":true}'
+        accountVisibility TEXT DEFAULT '{"BANK":true,"CREDIT_CARD":true,"INVESTMENT":true,"SIP":true,"LOAN":true,"BORROWED":true,"LENDED":true,"EMI":true,"RECURRING":true}',
+        budgetGraphSortOrder TEXT DEFAULT '[]',
+        budgetGraphDefaultItems INTEGER DEFAULT 3
       );`);
 
       await database.execAsync(`CREATE TABLE IF NOT EXISTS transactions (
@@ -427,7 +429,10 @@ export const initDatabase = async () => {
       await addColumn('users', 'timezone', 'TEXT', `'${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}'`);
       await addColumn('users', 'currency', 'TEXT', `'${Intl.NumberFormat?.().resolvedOptions?.().currency || 'INR'}'`);
       await addColumn('users', 'accountVisibility', 'TEXT', "'{\"BANK\":true,\"CREDIT_CARD\":true,\"INVESTMENT\":true,\"SIP\":true,\"LOAN\":true,\"BORROWED\":true,\"LENDED\":true,\"EMI\":true,\"RECURRING\":true}'");
+      await addColumn('users', 'budgetGraphSortOrder', 'TEXT', "'[]'");
+      await addColumn('users', 'budgetGraphDefaultItems', 'INTEGER', 3);
       await addColumn('sip_accounts', 'balance', 'REAL', 0);
+      await addColumn('investments', 'investedAmount', 'REAL', 0);
 
       // These are updates to existing columns or complex defaults, not simple column additions
       const runMigration = async (sql) => {
@@ -546,6 +551,7 @@ export const getAccounts = async (arg1, arg2) => {
             COALESCE(l.prepayments, b.prepayments, ln.prepayments) as prepayments,
             COALESCE(s.status, 'ACTIVE') as status,
             COALESCE(s.pausedMonths, '[]') as pausedMonths,
+            i.investedAmount,
             (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t WHERE (t.toAccountId = a.id OR t.linkedItemId = a.id) AND (t.type IN ('TRANSFER', 'PAYMENT', 'REPAY_LOAN', 'REPAY_BORROWED', 'EMI_PAYMENT', 'EMI_FINE', 'FINE', 'EXPENSE'))) as totalPaid,
             (SELECT COUNT(*) FROM transactions t WHERE (t.toAccountId = a.id OR t.linkedItemId = a.id) AND (t.type IN ('TRANSFER', 'PAYMENT', 'REPAY_LOAN', 'REPAY_BORROWED', 'EMI_PAYMENT', 'EXPENSE'))) as paymentCount,
             (SELECT combined.name 

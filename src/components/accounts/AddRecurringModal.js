@@ -35,6 +35,10 @@ export default function AddRecurringModal({ visible, accounts, activeUser, expen
   const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
+    setLocalCategories(expenseCategories || []);
+  }, [expenseCategories]);
+
+  useEffect(() => {
     if (visible && initialData) {
       setRName(initialData.name || '');
       setRAmount(initialData.amount?.toString() || '');
@@ -79,7 +83,7 @@ export default function AddRecurringModal({ visible, accounts, activeUser, expen
       cycleDays: rScheduleType === 'DYNAMIC' ? days : 0,
       nextDueDate: rScheduleType === 'DYNAMIC' ? rStartDate.toISOString() : new Date().toISOString(),
       note: '',
-      categoryId: rType === 'INCOME' ? null : (rCategoryId || null),
+      categoryId: rCategoryId || null,
       type: rType
     }, getCurrencySymbol(activeUser?.currency));
 
@@ -155,46 +159,44 @@ export default function AddRecurringModal({ visible, accounts, activeUser, expen
                 keyboardType="numeric" value={rAmount} onChangeText={setRAmount}
               />
 
-              {/* Category selection - only for Expense now as requested */}
-              {rType === 'EXPENSE' && (
-                <View style={{ marginTop: 20 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(13), marginTop: 0 }]}>
-                      Expense Category (Optional)
+              {/* Category selection */}
+              <View style={{ marginTop: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.fieldLabel, { color: theme.textMuted, fontSize: fs(13), marginTop: 0 }]}>
+                    {rType === 'INCOME' ? 'Income' : 'Expense'} Category (Optional)
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowAddCategory(!showAddCategory)}>
+                    <Text style={{ color: theme.primary, fontWeight: '800', fontSize: fs(12) }}>
+                      {showAddCategory ? 'CANCEL' : '+ NEW'}
                     </Text>
-                    <TouchableOpacity onPress={() => setShowAddCategory(!showAddCategory)}>
-                      <Text style={{ color: theme.primary, fontWeight: '800', fontSize: fs(12) }}>
-                        {showAddCategory ? 'CANCEL' : '+ NEW'}
-                      </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showAddCategory ? (
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TextInput
+                      style={[styles.input, { flex: 1, backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(15) }]}
+                      placeholder="e.g. Shopping"
+                      placeholderTextColor={theme.placeholder}
+                      value={newCategoryName} onChangeText={setNewCategoryName}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={{ backgroundColor: theme.primary, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 }}
+                      onPress={handleCreateCategory}
+                    >
+                      <Check color="white" size={24} />
                     </TouchableOpacity>
                   </View>
-
-                  {showAddCategory ? (
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <TextInput
-                        style={[styles.input, { flex: 1, backgroundColor: theme.surface, borderColor: theme.border, color: theme.text, fontSize: fs(15) }]}
-                        placeholder="e.g. Shopping"
-                        placeholderTextColor={theme.placeholder}
-                        value={newCategoryName} onChangeText={setNewCategoryName}
-                        autoFocus
-                      />
-                      <TouchableOpacity
-                        style={{ backgroundColor: theme.primary, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 }}
-                        onPress={handleCreateCategory}
-                      >
-                        <Check color="white" size={24} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <CustomDropdown
-                      options={localCategories.filter(c => c.type === 'EXPENSE').map(c => ({ label: c.name, value: c.id }))}
-                      selectedValue={rCategoryId}
-                      onSelect={setRCategoryId}
-                      placeholder="Select Expense Category..."
-                    />
-                  )}
-                </View>
-              )}
+                ) : (
+                  <CustomDropdown
+                    options={localCategories.filter(c => c.isSystem !== 1).map(c => ({ label: c.name, value: c.id }))}
+                    selectedValue={rCategoryId}
+                    onSelect={setRCategoryId}
+                    placeholder={`Select ${rType === 'INCOME' ? 'Income' : 'Expense'} Category...`}
+                  />
+                )}
+              </View>
 
               {!initialData?.id && (
                 <>

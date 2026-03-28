@@ -14,12 +14,14 @@ const { width, height } = Dimensions.get('window');
  */
 export default function MonthDetailModal({ 
   visible, onClose, month, theme, fs, activeUser, getCurrencySymbol, 
-  onDelete, onSaveItem 
+  onDelete, onSaveItem, onUpdateItem 
 }) {
   const [activeDetailTab, setActiveDetailTab] = useState('EXPENSE');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [expName, setExpName] = useState('');
   const [expAmount, setExpAmount] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
 
   if (!month) return null;
 
@@ -29,6 +31,13 @@ export default function MonthDetailModal({
     setExpName('');
     setExpAmount('');
     setIsAddingItem(false);
+  };
+
+  const handleUpdate = (id) => {
+    if (!editAmount) return;
+    onUpdateItem(id, Number(editAmount));
+    setEditingId(null);
+    setEditAmount('');
   };
 
   return (
@@ -144,7 +153,7 @@ export default function MonthDetailModal({
                       ) : (
                         item.isBudget ? <CheckCircle2 size={20} color={theme.primary} /> :
                         item.isDone ? <CheckCircle2 size={20} color={theme.success} /> : 
-                        item.isCoveredByBudget ? <CheckCircle2 size={20} color={theme.primary} /> :
+                        !!item.isCoveredByBudget ? <CheckCircle2 size={20} color={theme.primary} /> :
                         <Circle size={20} color={theme.textMuted} />
                       )}
                       <View style={{ marginLeft: 12, flex: 1, paddingRight: 8 }}>
@@ -156,9 +165,37 @@ export default function MonthDetailModal({
                       </View>
                     </View>
                     <View style={styles.checkRow}>
-                      <Text style={[styles.lineVal, { color: theme.text, fontSize: fs(14), fontWeight: '600' }]}>
-                        {getCurrencySymbol(activeUser?.currency)}{item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </Text>
+                      {editingId === item.id ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <TextInput 
+                            style={[styles.inlineInput, { color: theme.text, fontSize: fs(14), borderColor: theme.primary }]}
+                            value={editAmount}
+                            onChangeText={setEditAmount}
+                            keyboardType="numeric"
+                            autoFocus
+                          />
+                          <TouchableOpacity onPress={() => handleUpdate(item.id)} style={{ marginLeft: 8 }}>
+                            <Check size={18} color={theme.success} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setEditingId(null)} style={{ marginLeft: 8 }}>
+                            <X size={18} color={theme.textMuted} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          onPress={() => {
+                            if (!item.isDone && !item.isBudget && !(item.linkedAccountId || (item.name && item.name.startsWith('EMI:')))) {
+                              setEditingId(item.id);
+                              setEditAmount(String(item.amount));
+                            }
+                          }}
+                          disabled={!!item.isDone || !!item.isBudget || !!(item.linkedAccountId || (item.name && item.name.startsWith('EMI:')))}
+                        >
+                          <Text style={[styles.lineVal, { color: theme.text, fontSize: fs(14), fontWeight: '600' }]}>
+                            {getCurrencySymbol(activeUser?.currency)}{item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </Text>
+                        </TouchableOpacity>
+                       )}
                       {!item.isDone && !item.isBudget && (
                         <TouchableOpacity 
                           onPress={() => onDelete(item.id)} 
@@ -246,6 +283,14 @@ const styles = StyleSheet.create({
   lineItemDone: { opacity: 0.4 },
   checkRow: { flexDirection: 'row', alignItems: 'center' },
   lineName: { fontWeight: '700' },
+  inlineInput: {
+    width: 80,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+  },
   
   ccSection: { padding: 24, paddingBottom: 40, borderTopWidth: 1 },
   ccRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' },

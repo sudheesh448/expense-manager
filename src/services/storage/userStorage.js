@@ -127,3 +127,32 @@ export const updateAccountVisibility = async (userId, visibility) => {
   const database = await getDb();
   await database.runAsync('UPDATE users SET accountVisibility = ? WHERE id = ?', [JSON.stringify(visibility), userId || '']);
 };
+
+export const getBudgetGraphSettings = async (userId) => {
+  const database = await getDb();
+  const user = await database.getFirstAsync('SELECT budgetGraphSortOrder, budgetGraphDefaultItems FROM users WHERE id = ?', [userId || '']);
+  
+  let sortOrder = [];
+  let defaultItems = 3;
+  
+  if (user) {
+    if (user.budgetGraphSortOrder) {
+      try {
+        sortOrder = JSON.parse(user.budgetGraphSortOrder) || [];
+      } catch (e) {}
+    }
+    if (user.budgetGraphDefaultItems !== undefined && user.budgetGraphDefaultItems !== null) {
+      defaultItems = user.budgetGraphDefaultItems;
+    }
+  }
+  
+  return { sortOrder, defaultItems };
+};
+
+export const updateBudgetGraphSettings = async (userId, sortOrder, defaultItems) => {
+  const database = await getDb();
+  await database.runAsync(
+    'UPDATE users SET budgetGraphSortOrder = ?, budgetGraphDefaultItems = ? WHERE id = ?', 
+    [JSON.stringify(sortOrder), defaultItems, userId || '']
+  );
+};

@@ -18,7 +18,9 @@ import PriorityAlerts from '../components/dashboard/PriorityAlerts';
 import MonthlyInsights from '../components/dashboard/MonthlyInsights';
 import SavingsOverviewCard from '../components/dashboard/SavingsOverviewCard';
 import CreditCardStatusCard from '../components/dashboard/CreditCardStatusCard';
+import AccountTypeOverviewCard from '../components/dashboard/AccountTypeOverviewCard';
 import CustomGraphCard from '../components/dashboard/CustomGraphCard';
+import BudgetUtilizationCard from '../components/dashboard/BudgetUtilizationCard';
 import { getCurrencySymbol } from '../utils/currencyUtils';
 
 const { width } = Dimensions.get('window');
@@ -187,7 +189,7 @@ export default function Dashboard() {
         <PriorityAlerts alerts={alerts} theme={theme} fs={fs} />
         
         {(() => {
-          const defaultOrder = ['savingsOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
+          const defaultOrder = ['savingsOverview', 'budgetOverview', 'accountTypeOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
           const currentOrder = (graphOrder && graphOrder.length > 0) ? graphOrder : [...defaultOrder, ...(customGraphs || []).map(g => g.id)];
           
           return currentOrder.map((graphId) => {
@@ -197,6 +199,19 @@ export default function Dashboard() {
               return (
                 <SavingsOverviewCard 
                   key="savingsOverview"
+                  userId={activeUser.id} 
+                  theme={theme} 
+                  fs={fs} 
+                  currency={getCurrencySymbol(activeUser?.currency)} 
+                />
+              );
+            }
+
+            if (graphId === 'accountTypeOverview') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <AccountTypeOverviewCard 
+                  key="accountTypeOverview"
                   userId={activeUser.id} 
                   theme={theme} 
                   fs={fs} 
@@ -229,6 +244,20 @@ export default function Dashboard() {
                   fs={fs} 
                   currency={getCurrencySymbol(activeUser?.currency)} 
                   mode="total"
+                />
+              );
+            }
+
+            if (graphId === 'budgetOverview') {
+              if (dashboardGraphs[graphId] === false) return null;
+              return (
+                <BudgetUtilizationCard 
+                  key="budgetOverview"
+                  userId={activeUser.id}
+                  theme={theme}
+                  fs={fs}
+                  currency={getCurrencySymbol(activeUser?.currency)}
+                  refreshKey={refreshKey}
                 />
               );
             }

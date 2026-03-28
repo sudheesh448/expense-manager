@@ -4,7 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { 
   getAccounts, getTransactions, getExpectedExpenses, saveExpectedExpense, 
   deleteExpectedExpense, getAvailableHistory, getForecastDuration, 
-  getBudgets, getCategories, stabilizeSIPExpenses, generateAllRecurringExpenses, getDb 
+  getBudgets, getCategories, stabilizeSIPExpenses, generateAllRecurringExpenses, getDb,
+  updateExpectedExpenseAmount
 } from '../services/storage';
 import { generateProjections } from '../utils/projections';
 import { PlusCircle, CheckCircle2, Circle, Trash2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft, CreditCard } from 'lucide-react-native';
@@ -151,6 +152,15 @@ export default function Projections() {
     try {
       await deleteExpectedExpense(id);
       loadData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateItem = async (id, amount) => {
+    try {
+      await updateExpectedExpenseAmount(id, amount);
+      loadData(true); // silent refresh
     } catch (e) {
       console.error(e);
     }
@@ -303,6 +313,7 @@ export default function Projections() {
           getCurrencySymbol={getCurrencySymbol}
           onDelete={handleDelete}
           onSaveItem={handleSaveItem}
+          onUpdateItem={handleUpdateItem}
         />
     </View>
   );

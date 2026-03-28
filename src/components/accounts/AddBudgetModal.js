@@ -126,6 +126,7 @@ export default function AddBudgetModal({ visible, activeUser, categories, onClos
 
           <CategorySelectionModal
             visible={showCatModal}
+            userId={activeUser.id}
             categories={categories}
             selectedIds={selectedCategoryIds}
             onClose={() => setShowCatModal(false)}

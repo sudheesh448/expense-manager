@@ -5,7 +5,7 @@
 export const saveInvestmentInfo = async (database, id, data) => {
   if (!database || !id) return;
 
-  const sql = `INSERT INTO investments (id, userId, type, name, balance, sipAmount, categoryId, lastUpdate, isClosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const sql = `INSERT INTO investments (id, userId, type, name, balance, sipAmount, investedAmount, categoryId, lastUpdate, isClosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   
   await database.runAsync(sql, [
     id,
@@ -14,6 +14,7 @@ export const saveInvestmentInfo = async (database, id, data) => {
     data.name,
     Number(data.balance || 0),
     Number(data.sipAmount || 0),
+    Number(data.investedAmount || 0),
     data.categoryId || null,
     new Date().toISOString(),
     data.isClosed ? 1 : 0
@@ -27,13 +28,14 @@ export const updateInvestmentInfo = async (database, id, data) => {
   if (!database || !id) return;
 
   const sql = `UPDATE investments SET 
-    name = ?, balance = ?, sipAmount = ?, categoryId = ?, lastUpdate = ?, isClosed = ?
+    name = ?, balance = ?, sipAmount = ?, investedAmount = ?, categoryId = ?, lastUpdate = ?, isClosed = ?
     WHERE id = ?`;
     
   await database.runAsync(sql, [
     data.name,
     Number(data.balance || 0),
     Number(data.sipAmount || 0),
+    Number(data.investedAmount || 0),
     data.categoryId || null,
     new Date().toISOString(),
     data.isClosed ? 1 : 0,

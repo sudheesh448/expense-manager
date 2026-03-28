@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { useAuth } from './AuthContext';
-import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCustomGraphs, saveCustomGraphs, getAccountVisibility, updateAccountVisibility } from '../services/storage';
+import { getUserTheme, updateThemePreference, getUserFontScale, updateFontScale, getDashboardGraphs, updateDashboardGraphs, getCustomGraphs, saveCustomGraphs, getAccountVisibility, updateAccountVisibility, getBudgetGraphSettings, updateBudgetGraphSettings } from '../services/storage';
 import { lightTheme, darkTheme } from '../theme/colors';
 
 const ThemeContext = createContext();
@@ -28,11 +28,14 @@ export const ThemeProvider = ({ children }) => {
   const [dashboardGraphs, setDashboardGraphs] = useState({ 
     monthlyInsight: true, 
     savingsOverview: true,
+    budgetOverview: true,
+    accountTypeOverview: true,
     ccDues: true,
     ccTotal: true
   });
   const [graphOrder, setGraphOrder] = useState([]);
   const [customGraphs, setCustomGraphs] = useState([]);
+  const [budgetGraphSettings, setBudgetGraphSettings] = useState({ sortOrder: [], defaultItems: 3 });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -57,27 +60,32 @@ export const ThemeProvider = ({ children }) => {
       setDashboardGraphs({ 
         monthlyInsight: true, 
         savingsOverview: true,
+        budgetOverview: true,
+        accountTypeOverview: true,
         ccDues: true,
         ccTotal: true
       });
       setGraphOrder([]);
       setCustomGraphs([]);
+      setBudgetGraphSettings({ sortOrder: [], defaultItems: 3 });
     }
   }, [activeUser, systemScheme]);
 
   const loadPreferences = async () => {
     try {
-      const [savedTheme, savedScale, dashboardPref, savedCustom, savedVisibility] = await Promise.all([
+      const [savedTheme, savedScale, dashboardPref, savedCustom, savedVisibility, budgetPrefs] = await Promise.all([
         getUserTheme(activeUser.id),
         getUserFontScale(activeUser.id),
         getDashboardGraphs(activeUser.id),
         getCustomGraphs(activeUser.id),
         getAccountVisibility(activeUser.id),
+        getBudgetGraphSettings(activeUser.id)
       ]);
       
       if (savedTheme) setThemeMode(savedTheme);
       if (savedScale) setFontScale(savedScale);
       if (savedVisibility) setAccountVisibility(savedVisibility);
+      if (budgetPrefs) setBudgetGraphSettings(budgetPrefs);
       
       const customList = savedCustom || [];
       setCustomGraphs(customList);
@@ -86,12 +94,14 @@ export const ThemeProvider = ({ children }) => {
         const defaultGraphs = { 
           monthlyInsight: true, 
           savingsOverview: true,
+          budgetOverview: true,
+          accountTypeOverview: true,
           ccDues: true,
           ccTotal: true
         };
         setDashboardGraphs({ ...defaultGraphs, ...(dashboardPref.graphs || {}) });
         
-        const defaultOrder = ['savingsOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
+        const defaultOrder = ['savingsOverview', 'budgetOverview', 'accountTypeOverview', 'monthlyInsight', 'ccDues', 'ccTotal'];
         const savedOrder = dashboardPref.order || [];
         // Add any missing default or custom graphs to the saved order
         const mergedOrder = [...savedOrder];
@@ -169,6 +179,13 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
+  const setBudgetGraphSettingsPreference = async (sortOrder, defaultItems) => {
+    setBudgetGraphSettings({ sortOrder, defaultItems });
+    if (activeUser) {
+      await updateBudgetGraphSettings(activeUser.id, sortOrder, defaultItems);
+    }
+  };
+
   return (
     <ThemeContext.Provider value={{ 
       theme, themeMode, toggleTheme, 
@@ -183,6 +200,8 @@ export const ThemeProvider = ({ children }) => {
         isSettingsOpen,
         setIsSettingsOpen,
         isThemeResolved,
+        budgetGraphSettings,
+        setBudgetGraphSettingsPreference,
       fs 
     }}>
       {children}
